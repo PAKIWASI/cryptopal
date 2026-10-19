@@ -73,6 +73,7 @@ endif()
 set(SRC_FILES
     src/wc_imp.c
     # set1
+    src/set1/set1.c
     src/set1/challenge1.c
 )
 
