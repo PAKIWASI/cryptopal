@@ -1,0 +1,44 @@
+CompileFlags:
+  CompilationDatabase: build/
+  Add:
+    - -Wconversion
+    - -Wsign-conversion
+    - -Wstrict-prototypes
+    - -Wold-style-definition
+    - -Wmissing-prototypes
+    - -Wwrite-strings
+    - -Wpointer-arith
+    - -Wformat=2
+    - -Wnull-dereference
+    - -Wundef
+    - -Wimplicit-fallthrough
+
+Diagnostics:
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - cert-*
+      - clang-analyzer-*
+      - performance-*
+      - portability-*
+      - readability-*
+      - misc-*
+    Remove:
+      - readability-magic-numbers
+      - readability-identifier-length
+      - readability-identifier-naming
+      - readability-function-cognitive-complexity
+      - readability-uppercase-literal-suffix
+      - readability-avoid-const-params-in-decls
+      - readability-isolate-declaration
+      - readability-non-const-parameter 
+      - readability-avoid-nested-conditional-operator
+      
+      - bugprone-easily-swappable-parameters
+      - bugprone-assignment-in-if-condition 
+
+      - cert-err33-c
+      - cert-dcl03-c
+
+      - misc-include-cleaner
+      - misc-no-recursion
