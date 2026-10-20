@@ -5,7 +5,7 @@
 #include <stdio.h>
 
 
-static float score_with_key(StrView line, u8 key, String* out)
+float score_with_key(StrView line, u8 key, String* out)
 {
     float freq[256] = {0};
     if (out) {
