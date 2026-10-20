@@ -54,6 +54,7 @@ static wc_always_inline u8 hex_to_byte(char h1) // 0-9, a-f
 
 void hex_decode(StrView hex, String* bytes)
 {
+    String_clear(bytes);
     u64 i = 0;
     while (i + 1 < hex.len) { // we process 2 hex chars at once
         String_append_char(bytes, (char)((hex_to_byte(hex.data[i]) << 4) | hex_to_byte(hex.data[i + 1])));

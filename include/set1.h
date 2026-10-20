@@ -63,9 +63,19 @@ You can do this by hand. But don't: write code to do it for you.
 How? Devise some method for "scoring" a piece of English plaintext. Character frequency is a good metric. Evaluate each output and choose the one with the best score. 
 */
 
+float score_eng_text(float freq[256], u64 total_chars);
 void decode_char_xor(StrView bytes, String* decoded);
 int challenge3_run(void);
 
 
+// challenge 4
+/*
+ One of the 60-character strings in data/challenge4.txt has been encrypted by single-character XOR
 
+Find it.
+
+(Your code from #3 should help.)
+*/
+
+int challenge4_run(void);
 

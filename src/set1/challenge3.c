@@ -112,7 +112,7 @@ static const float ascii_char_freq[256] = {
 _Static_assert(sizeof(ascii_char_freq) / sizeof(ascii_char_freq[0]) == 256, "ascii_char_freq must have 256 entries");
 
 
-static wc_always_inline float score_eng_text(float freq[256], u64 total_chars)
+float score_eng_text(float freq[256], u64 total_chars)
 {
     float score = 0;
     for (int i = 0; i < 256; i++) {
