@@ -6,10 +6,11 @@
 
 
 
+static const char digits[] = "0123456789abcdef";
+
 
 void hex_encode(StrView bytes, String* hex)
 {
-    static const char digits[] = "0123456789abcdef";
     String_clear(hex);
     for (u64 i = 0; i < bytes.len; i++) {
         u8 b = (u8)bytes.data[i];
@@ -68,7 +69,6 @@ int challenge2_run(void)
     hex_encode(StrView_over_String(&xored), &hex);
     String_print(&hex);
     putchar('\n');
-
 
     String_destroy(&input1);
     String_destroy(&input2);
