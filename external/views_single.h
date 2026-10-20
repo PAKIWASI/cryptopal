@@ -3267,8 +3267,8 @@ void String_append_multi(String* str, const char* data, u64 len)
         return;
     }
 
-    ensure_capacity(str, len);
-    memcpy(GET_STR(str), data, len);
+    ensure_capacity(str, len + str->size);
+    memcpy(GET_STR(str) + str->size, data, len);
     str->size += len;
 }
 

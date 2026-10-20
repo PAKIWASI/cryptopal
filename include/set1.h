@@ -19,9 +19,10 @@ SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t
 
 So go ahead and make that happen. You'll need to use this code for the rest of the exercises.
 */
+
 void hex_decode(StrView hex, String* bytes);
 void base64_encode(StrView bytes, String* base64);
-int challenge1_run(void);
+int  challenge1_run(void);
 
 
 // challenge 2
@@ -42,9 +43,6 @@ If your function works properly, then when you feed it the string:
 
 746865206b696420646f6e277420706c6179
 */
+void hex_encode(StrView bytes, String* hex);
 void fixed_xor(StrView bytes1, StrView bytes2, String* xored);
-
-
-
-
-
+int  challenge2_run(void);
