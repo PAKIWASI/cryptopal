@@ -15,26 +15,21 @@ void encript_repeated_xor(StrView text, StrView key, String* encripted)
 
 int challenge5_run(void)
 {
-    const char* text = "Burning 'em, if you ain't quick and nimble\n I go crazy when I hear a cymbal\n";
+    const char* text = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal";
     const char* key  = "ICE";
 
     String encrpted = String_with_cap(WC_LIBC, strlen(text));
     encript_repeated_xor(StrView_over_cstr(text), StrView_over_cstr(key), &encrpted);
 
-    String hex = String_with_cap(WC_LIBC, String_len(&encrpted));
+    String hex = String_with_cap(WC_LIBC, String_capacity(&encrpted));
     hex_encode(StrView_over_String(&encrpted), &hex);
-
 
     printf("text:\n%s\n", text);
     printf("key: %s\n", key);
-    printf("Encripted: ");
-    String_print(&encrpted);
     putchar('\n');
     printf("Hexed: ");
     String_print(&hex);
     putchar('\n');
-
-
 
     String_destroy(&hex);
     String_destroy(&encrpted);
