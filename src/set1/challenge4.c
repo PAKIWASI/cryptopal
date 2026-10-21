@@ -1,7 +1,6 @@
 #include "set1.h"
 #include "views_single.h"
 
-#include <assert.h>
 #include <stdio.h>
 
 
@@ -39,7 +38,7 @@ int challenge4_run(void)
     String decoded = String_with_cap(WC_LIBC, 128);
 
     u64 line_no = 0;
-    while (fgets(line, sizeof line, f)) {
+    while (fgets(line, sizeof(line), f)) {
         line_no++;
 
         // 1. strip trailing newline(s)
@@ -57,7 +56,7 @@ int challenge4_run(void)
         // 2. hex-decode this line
         hex_decode(StrView_over_cstr(line), &bytes);
 
-        // 3. try every key, XOR the *whole* line
+        // 3. try every key, XOR the whole line
         for (int k = 0; k < 256; k++) {
             float score = score_with_key(StrView_over_String(&bytes), (u8)k, &decoded);
             if (score < best_score) {

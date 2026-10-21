@@ -1,7 +1,6 @@
 #include "set1.h"
 #include "views_single.h"
 
-#include <assert.h>
 #include <stdio.h>
 
 
@@ -47,7 +46,7 @@ static wc_always_inline u8 hex_to_byte(char h1) // 0-9, a-f
     case 'F':
         return 0x0F;
     default:
-        assert(false);
+        WC_ASSERT(false, "non hex char");
     }
 }
 
