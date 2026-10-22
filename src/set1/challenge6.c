@@ -103,10 +103,8 @@ static u8 find_keysize(StrView text, float best_eds[MAX_KEYS], u8 best_keys[MAX_
         if (num == MAX_KEYS && d >= best_eds[MAX_KEYS - 1]) {
             continue;
         }
-
         // slot to fill: a new one, or overwrite the worst (last)
         u8 i = (num < MAX_KEYS) ? num++ : MAX_KEYS - 1;
-
         // shift worse entries down to keep the array sorted ascending
         while (i > 0 && best_eds[i - 1] > d) {
             best_eds[i]  = best_eds[i - 1];
@@ -147,12 +145,10 @@ static String* transform_blocks(StrView text, u8 keysize)
     }
 
     // for each keysized text chunk
-    // for (u64 i = 0; i < text.len; i += keysize) {
     for (u64 c = 0; c < text_chunks; c++) {
         // for each char in the chunk, place the first char of each chunk into the first block,
         // the second char into the second block and so on
         for (u8 k = 0; k < keysize; k++) {
-            // String_append_char(&blocks[k], text.data[i + k]);
             String_append_char(&blocks[k], text.data[(c * keysize) + k]);
         }
     }
@@ -205,7 +201,7 @@ int challenge6_run(void)
     String* blocks = transform_blocks(text, keysize); // cleanup and free needed
 
     // break each block as a single char xor dechiper (each blocks is encripted with one char of the key)
-    // deciphered char from blocks[i] is the ith char if the key
+    // deciphered char from blocks[i] is the ith char of the key
     String key = String_with_cap(WC_LIBC, keysize);
     String d   = String_with_cap(WC_LIBC, keysize); // not needed here but decript_char_xor requires it for temp work
 
@@ -215,13 +211,17 @@ int challenge6_run(void)
         String_append_char(&key, k);
     }
 
-    printf("FOUND THE KEY: ");
+    printf("\nFOUND THE KEY: ");
     String_print(&key);
     putchar('\n');
 
+    // do repeated key xor again on the text
+    // this undoes the original xor encription and leaves plain text
     String decoded = String_with_cap(WC_LIBC, size);
     encript_repeated_xor(text, StrView_over_String(&key), &decoded);
+    printf("\n\n DECODED TEXT\n\n");
     String_print(&decoded);
+    printf("\n\n");
 
 
     String_destroy(&decoded);
