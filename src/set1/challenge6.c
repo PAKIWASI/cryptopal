@@ -1,5 +1,6 @@
 #include "set1.h"
 #include "views_single.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -198,25 +199,33 @@ int challenge6_run(void)
     // break each block as a single char xor dechiper (each blocks is encripted with one char of the key)
     // deciphered char from blocks[i] is the ith char if the key
     String key = String_with_cap(WC_LIBC, keysize);
-    String decoded =
-        String_with_cap(WC_LIBC, keysize); // not needed here but decript_char_xor requires it for temp work
+    String d   = String_with_cap(WC_LIBC, keysize); // not needed here but decript_char_xor requires it for temp work
 
     // find each key char of the key from each block
     for (u8 i = 0; i < keysize; i++) {
-        char k = (char)decript_char_xor(StrView_over_String(&blocks[i]), &decoded);
+        char k = (char)decript_char_xor(StrView_over_String(&blocks[i]), &d);
         String_append_char(&key, k);
     }
 
-    String hex_key = String_with_cap(WC_LIBC, keysize);
-    hex_encode(StrView_over_String(&key), &hex_key);
+    String base64_key = String_with_cap(WC_LIBC, keysize);
+    base64_encode(StrView_over_String(&key), &base64_key);
 
     printf("FOUND THE KEY: ");
-    String_print(&hex_key);
+    String_print(&base64_key);
     putchar('\n');
 
+    String decoded = String_with_cap(WC_LIBC, size);
+    encript_repeated_xor(text, StrView_over_String(&key), &decoded);
 
-    String_destroy(&hex_key);
+    String base64_decoded = String_with_cap(WC_LIBC, keysize);
+    base64_encode(StrView_over_String(&key), &base64_decoded);
+
+    String_print(&base64_decoded);
+
+
     String_destroy(&decoded);
+    String_destroy(&base64_key);
+    String_destroy(&d);
     String_destroy(&key);
     for (u8 i = 0; i < keysize; i++) {
         String_destroy(&blocks[i]);
@@ -227,6 +236,3 @@ int challenge6_run(void)
     fclose(f);
     return 0;
 }
-
-
-

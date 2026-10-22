@@ -132,7 +132,7 @@ u8 decript_char_xor(StrView bytes, String* decoded)
     // temp holds temp text, decode stores the best scoring text
     String temp       = String_with_cap(decoded->alloc, decoded->capacity);
     float  best_score = 100000.0F;
-    u8 best_key = 255;
+    u8     best_key   = 255;
 
     for (int i = 0; i < 256; i++) { // for each 1-byte char
         String_clear(&temp);
@@ -146,7 +146,7 @@ u8 decript_char_xor(StrView bytes, String* decoded)
         float score = score_eng_text(freq, bytes.len);
         if (score < best_score) {
             best_score = score;
-            best_key = (u8)i;
+            best_key   = (u8)i;
             String_clear(decoded);
             String_append_String(decoded, &temp);
         }
