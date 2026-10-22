@@ -64,7 +64,7 @@ How? Devise some method for "scoring" a piece of English plaintext. Character fr
 */
 
 float score_eng_text(float freq[256], u64 total_chars);
-u8  decript_char_xor(StrView bytes, String* decoded);
+u8    decript_char_xor(StrView bytes, String* decoded);
 int   challenge3_run(void);
 
 
@@ -139,3 +139,21 @@ void  base64_decode(StrView base64, String* bytes);
 float bitwise_edit_distance(StrView s1, StrView s2);
 float avg_bitwise_edit_distance(StrView text, u32 keysize);
 int   challenge6_run(void);
+
+
+// challenge 7
+/*
+AES in ECB mode
+
+The Base64-encoded content in this file (data/challenge7.txt)has been encrypted via AES-128 in ECB mode under the key
+
+"YELLOW SUBMARINE".
+
+(case-sensitive, without the quotes; exactly 16 characters; I like "YELLOW SUBMARINE" because it's exactly 16 bytes long, and now you do too).
+
+Decrypt it. You know the key, after all.
+
+Easiest way: use OpenSSL::Cipher and give it AES-128-ECB as the cipher. 
+*/
+
+int challenge7_run(void);
