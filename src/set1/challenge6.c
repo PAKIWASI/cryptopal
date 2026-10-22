@@ -5,52 +5,45 @@
 #include <stdlib.h>
 
 
-// input: base64 char
-// output: 6 bit (2^6=64) value as a u8 (lower bits set)
-// derived from challenge1: to_base64_char
-static wc_always_inline u8 base64_to_ascii(char c)
+static int b64_val(char c)
 {
-    if (c >= 'a' && c <= 'z') {
-        return (u8)(c - 'a');
-    }
     if (c >= 'A' && c <= 'Z') {
-        return (u8)(c - 'A' + 26);
+        return c - 'A';
+    }
+    if (c >= 'a' && c <= 'z') {
+        return c - 'a' + 26;
     }
     if (c >= '0' && c <= '9') {
-        return (u8)(c - '0' + 52);
+        return c - '0' + 52;
     }
     if (c == '+') {
         return 62;
     }
-    return 63; // '/'
+    if (c == '/') {
+        return 63;
+    }
+    return -1; // newline, '=', anything else
 }
 
-// 4 base64 chars = 4 * 6 = 24 bytes = 8 + 8 + 8 bytes decoded
-// each 4 base64 chars of 6 bits each make up 3 8 bit ascii chars
 void base64_decode(StrView base64, String* bytes)
 {
-    u64 i = 0;
-    while (i + 3 < base64.len) { // 0th, 1st, 2nd and 3rd are in range
-        // process 4 chars at once
-        u8 b1 = base64_to_ascii(base64.data[i]);
-        u8 b2 = base64_to_ascii(base64.data[i + 1]);
-        u8 b3 = base64_to_ascii(base64.data[i + 2]);
-        u8 b4 = base64_to_ascii(base64.data[i + 3]);
-
-        u8 out[3] = {0}; // the three 8 byte acii outputs for these 4 base64 chars
-
-        out[0] = (u8)(b1 << 2);  // set top 6 bits with b1
-        out[0] |= (u8)(b2 >> 4); // get bottom 2 from b2 (b2 has 4 left)
-
-        out[1] = (u8)(b2 << 4);  // set top 4 bits with remainign b2
-        out[1] |= (u8)(b3 >> 2); // set bottom 4 from b3 (b3 has 2 remaining)
-
-        out[2] = (u8)(b3 << 6); // set top 4 from b3's remaining 2
-        out[2] |= b4;           // set bottom 6 bits from b4
-
-        String_append_multi(bytes, (const char*)out, 3);
-
-        i += 4;
+    u32 acc  = 0;
+    int bits = 0;
+    for (u64 i = 0; i < base64.len; i++) {
+        if (base64.data[i] == '=') {
+            break;
+        }
+        int v = b64_val(base64.data[i]);
+        if (v < 0) {
+            continue; // skip whitespace
+        }
+        acc = (acc << 6) | (u32)v;
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            String_append_char(bytes, (char)((acc >> bits) & 0xFF));
+            acc &= (1u << bits) - 1; // drop consumed bits
+        }
     }
 }
 
@@ -76,57 +69,65 @@ float bitwise_edit_distance(StrView s1, StrView s2)
     return distance;
 }
 
-// take 4 keysized blocks from text, find bitwise_edit_distance for each
-// consecative 2 blocks, then average and normalise them
+
+//use every consecutive block pair in the ciphertext
 float avg_bitwise_edit_distance(StrView text, u32 keysize)
 {
-    WC_ASSERT(text.len >= (u64)4 * keysize, "text is not long enough");
+    u64 nblocks = text.len / keysize;
+    WC_ASSERT(nblocks >= 2, "text is not long enough");
 
-    float avg_edis = 0;
-    for (int i = 0; i < 3; i++) {
-        StrView sv1 = StrView_slice(text, (u64)i * keysize, keysize);
-        StrView sv2 = StrView_slice(text, (u64)(i + 1) * keysize, keysize);
-        avg_edis += bitwise_edit_distance(sv1, sv2);
+    u64   pairs = nblocks - 1;
+    float total = 0;
+    for (u64 i = 0; i < pairs; i++) {
+        StrView a = StrView_slice(text, i * keysize, keysize);
+        StrView b = StrView_slice(text, (i + 1) * keysize, keysize);
+        total += bitwise_edit_distance(a, b);
     }
-
-    return avg_edis / (float)keysize;
+    return total / ((float)pairs * (float)keysize);
 }
 
 #define MAX_KEY_SIZE 64
 #define MAX_KEYS     4
 
-static void find_keysize(StrView text, float best_eds[MAX_KEYS], u8 best_keys[MAX_KEYS])
+// returns how many candidates were found
+static u8 find_keysize(StrView text, float best_eds[MAX_KEYS], u8 best_keys[MAX_KEYS])
 {
+    WC_ASSERT(text.len >= (u64)2 * MAX_KEY_SIZE, "text too short");
+
     u8 num = 0;
 
-    // all keysizes between 1 and MAX_KEY_SIZE
     for (u8 k = 1; k <= MAX_KEY_SIZE; k++) {
-        float ed_dis = avg_bitwise_edit_distance(text, k);
-        if (num < MAX_KEYS) {
-            best_keys[num] = k;
-            best_eds[num]  = ed_dis;
-            num++;
-        } else {
-            for (u8 i = 0; i < MAX_KEYS; i++) {
-                if (best_eds[i] > ed_dis) {
-                    best_eds[i]  = ed_dis;
-                    best_keys[i] = k;
-                    break;
-                }
-            }
+        float d = avg_bitwise_edit_distance(text, k);
+
+        // full and not better than the current worst: skip
+        if (num == MAX_KEYS && d >= best_eds[MAX_KEYS - 1]) {
+            continue;
         }
+
+        // slot to fill: a new one, or overwrite the worst (last)
+        u8 i = (num < MAX_KEYS) ? num++ : MAX_KEYS - 1;
+
+        // shift worse entries down to keep the array sorted ascending
+        while (i > 0 && best_eds[i - 1] > d) {
+            best_eds[i]  = best_eds[i - 1];
+            best_keys[i] = best_keys[i - 1];
+            i--;
+        }
+        best_eds[i]  = d;
+        best_keys[i] = k;
     }
 
-    printf("Best Edit Distances:\t");
-    for (u8 i = 0; i < MAX_KEYS; i++) {
+    printf("Best Key Size:\t\t");
+    for (u8 i = 0; i < num; i++) {
+        printf("%u\t", best_keys[i]);
+    }
+    printf("\nBest Edit Distances:\t");
+    for (u8 i = 0; i < num; i++) {
         printf("%f\t", best_eds[i]);
     }
     putchar('\n');
-    printf("Best Key Size:\t");
-    for (u8 i = 0; i < MAX_KEYS; i++) {
-        printf("%u\t", best_keys[i]);
-    }
-    putchar('\n');
+
+    return num;
 }
 
 // cleanup and free needed
@@ -146,11 +147,13 @@ static String* transform_blocks(StrView text, u8 keysize)
     }
 
     // for each keysized text chunk
-    for (u64 i = 0; i < text.len; i += keysize) {
+    // for (u64 i = 0; i < text.len; i += keysize) {
+    for (u64 c = 0; c < text_chunks; c++) {
         // for each char in the chunk, place the first char of each chunk into the first block,
         // the second char into the second block and so on
         for (u8 k = 0; k < keysize; k++) {
-            String_append_char(&blocks[k], text.data[i + k]);
+            // String_append_char(&blocks[k], text.data[i + k]);
+            String_append_char(&blocks[k], text.data[(c * keysize) + k]);
         }
     }
 
@@ -186,13 +189,18 @@ int challenge6_run(void)
     // I set max keys to 2 since more than 2 are multiples
     float best_eds[MAX_KEYS];
     u8    best_keys[MAX_KEYS];
-    find_keysize(text, best_eds, best_keys);
-    u8 keysize = best_keys[0];
-    for (u8 i = 0; i < MAX_KEYS; i++) {
-        if (best_keys[i] < keysize) {
+    u8    num     = find_keysize(text, best_eds, best_keys);
+    u8    keysize = best_keys[0]; // best score (requires the sorted version of find_keysize)
+    for (u8 i = 1; i < num; i++) {
+        // a smaller candidate that divides the current pick is the real key length
+        if (best_keys[i] < keysize && keysize % best_keys[i] == 0) {
             keysize = best_keys[i];
         }
     }
+
+    printf("KEYSIZE: %u\n", keysize);
+
+    // transform chunks into blocks
 
     String* blocks = transform_blocks(text, keysize); // cleanup and free needed
 
@@ -207,24 +215,16 @@ int challenge6_run(void)
         String_append_char(&key, k);
     }
 
-    String base64_key = String_with_cap(WC_LIBC, keysize);
-    base64_encode(StrView_over_String(&key), &base64_key);
-
     printf("FOUND THE KEY: ");
-    String_print(&base64_key);
+    String_print(&key);
     putchar('\n');
 
     String decoded = String_with_cap(WC_LIBC, size);
     encript_repeated_xor(text, StrView_over_String(&key), &decoded);
-
-    String base64_decoded = String_with_cap(WC_LIBC, keysize);
-    base64_encode(StrView_over_String(&key), &base64_decoded);
-
-    String_print(&base64_decoded);
+    String_print(&decoded);
 
 
     String_destroy(&decoded);
-    String_destroy(&base64_key);
     String_destroy(&d);
     String_destroy(&key);
     for (u8 i = 0; i < keysize; i++) {

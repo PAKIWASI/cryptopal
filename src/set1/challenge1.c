@@ -81,18 +81,15 @@ void hex_decode(StrView hex, String* bytes)
 static wc_always_inline char to_base64_char(u8 val)
 {
     if (val < 26) {
-        return (char)('a' + val);
-    } // (your lowercase-first alphabet)
+        return (char)('A' + val);
+    }
     if (val < 52) {
-        return (char)('A' + (val - 26));
+        return (char)('a' + (val - 26));
     }
     if (val < 62) {
         return (char)('0' + (val - 52));
     }
-    if (val == 62) {
-        return '+';
-    }
-    return '/'; // val == 63
+    return val == 62 ? '+' : '/';
 }
 
 /*
@@ -173,6 +170,3 @@ int challenge1_run(void)
     String_destroy(&base64);
     return 0;
 }
-
-
-
