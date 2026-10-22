@@ -2,7 +2,6 @@
 #include "views_single.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 
 // input: base64 char
@@ -76,153 +75,158 @@ float bitwise_edit_distance(StrView s1, StrView s2)
     return distance;
 }
 
-// static int edit_distance_test(void)
-// {
-//     const char* c1 = "this is a test";
-//     const char* c2 = "wokka wokka!!!";
-//
-//     // should be 37
-//     printf("Edit Distance: %f\n", bitwise_edit_distance(StrView_over_cstr(c1), StrView_over_cstr(c2)));
-//
-//     return 0;
-// }
+// take 4 keysized blocks from text, find bitwise_edit_distance for each
+// consecative 2 blocks, then average and normalise them
+float avg_bitwise_edit_distance(StrView text, u32 keysize)
+{
+    WC_ASSERT(text.len >= (u64)4 * keysize, "text is not long enough");
+
+    float avg_edis = 0;
+    for (int i = 0; i < 3; i++) {
+        StrView sv1 = StrView_slice(text, (u64)i * keysize, keysize);
+        StrView sv2 = StrView_slice(text, (u64)(i + 1) * keysize, keysize);
+        avg_edis += bitwise_edit_distance(sv1, sv2);
+    }
+
+    return avg_edis / (float)keysize;
+}
 
 #define MAX_KEY_SIZE 64
+#define MAX_KEYS     4
 
-static u8 find_key_size(StrView text)
+static void find_keysize(StrView text, float best_eds[MAX_KEYS], u8 best_keys[MAX_KEYS])
 {
-    WC_ASSERT(text.len >= (u64)2 * MAX_KEY_SIZE, "text not long enough: %lu", text.len);
+    u8 num = 0;
 
-    // the key size with the smallest edit distance is PROBABLY the key
-    float smallest_edit_dis = 100000.0F;
-    u8    smallest_key_size = 255;
-
-    char bytes1[MAX_KEY_SIZE] = {0};
-    char bytes2[MAX_KEY_SIZE] = {0};
-
-    // check key sizes from 1 to 64 bytes
-    for (u8 keysize = 1; keysize <= MAX_KEY_SIZE; keysize++) {
-
-        memcpy(bytes1, text.data, keysize);
-        memcpy(bytes2, text.data + keysize, keysize);
-
-        float edit_dis = bitwise_edit_distance(StrView_over_buf(bytes1, keysize), StrView_over_buf(bytes2, keysize));
-        edit_dis /= (float)keysize; // normalise
-
-        if (edit_dis < smallest_edit_dis) {
-            smallest_edit_dis = edit_dis;
-            smallest_key_size = keysize;
+    // all keysizes between 1 and MAX_KEY_SIZE
+    for (u8 k = 1; k <= MAX_KEY_SIZE; k++) {
+        float ed_dis = avg_bitwise_edit_distance(text, k);
+        if (num < MAX_KEYS) {
+            best_keys[num] = k;
+            best_eds[num]  = ed_dis;
+            num++;
+        } else {
+            for (u8 i = 0; i < MAX_KEYS; i++) {
+                if (best_eds[i] > ed_dis) {
+                    best_eds[i]  = ed_dis;
+                    best_keys[i] = k;
+                    break;
+                }
+            }
         }
     }
 
-    printf("Smallest Edit Distance: %f\n", smallest_edit_dis);
-    printf("Smallest Key Size: %u\n", smallest_key_size);
-
-    return smallest_key_size;
-}
-
-
-
-typedef struct {
-    String* strings;
-    u64     size;
-} StringArr;
-
-static StringArr StringArr_create(u64 size)
-{
-    String* strings = malloc(sizeof(String) * size);
-    for (u64 i = 0; i < size; i++) {
-        strings[i] = String_create(WC_LIBC);
+    printf("Best Edit Distances:\t");
+    for (u8 i = 0; i < MAX_KEYS; i++) {
+        printf("%f\t", best_eds[i]);
     }
-    return (StringArr){.strings = strings, .size = size};
-}
-
-static void StringArr_destroy(StringArr* sarr)
-{
-    for (u64 i = 0; i < sarr->size; i++) {
-        String_destroy(&sarr->strings[i]);
+    putchar('\n');
+    printf("Best Key Size:\t");
+    for (u8 i = 0; i < MAX_KEYS; i++) {
+        printf("%u\t", best_keys[i]);
     }
+    putchar('\n');
 }
 
-
-// find the best single char xor key for line. found by scoring text
-void find_best_key(StrView line, float* best_score, u8* best_key)
+// cleanup and free needed
+static String* transform_blocks(StrView text, u8 keysize)
 {
-    *best_score = 10000.0F;
-    *best_key   = 0;
+    /*
+        (text chunks) |---|---|---|---|---| (5 blocks, len 3)
+            after transform:
+        (string blocks) |-----|-----|-----| (3 blocks, len 5)
+    */
 
-    for (int k = 0; k < 256; k++) {
-        float score = score_with_key(line, (u8)k, NULL);
-        if (score < *best_score) {
-            *best_score = score;
-            *best_key   = (u8)k;
+    u64 text_chunks = text.len / keysize; // remaining incomplete block is ignored
+    // init array of blocks, numbering keysize
+    String* blocks = malloc(sizeof(String) * keysize);
+    for (u8 i = 0; i < keysize; i++) {
+        blocks[i] = String_with_cap(WC_LIBC, text_chunks);
+    }
+
+    // for each keysized text chunk
+    for (u64 i = 0; i < text.len; i += keysize) {
+        // for each char in the chunk, place the first char of each chunk into the first block,
+        // the second char into the second block and so on
+        for (u8 k = 0; k < keysize; k++) {
+            String_append_char(&blocks[k], text.data[i + k]);
         }
     }
+
+    return blocks;
 }
 
 
 int challenge6_run(void)
 {
     FILE* f = fopen("data/challenge6.txt", "r");
-    FATAL_IF(!f, "file not found");
+    FATAL_IF(!f, "could not open challenge6.txt");
 
     // get file size
     fseek(f, 0, SEEK_END);
     u64 size = (u64)ftell(f);
     fseek(f, 0, SEEK_SET);
-    printf("size: %lu\n", size);
+    printf("File Size: %lu\n", size);
 
-    // store whole file in a string
-    String text = String_with_cap(WC_LIBC, size);
-    // fread(String_data_ptr(&text), size, 1, f); // BUG: segfault
-    fread(text.heap, size, 1, f);
-    text.size = size;
-    String_print(&text);
+    // make a string to store all the text and read in the entire file
+    String text_base64 = String_with_cap(WC_LIBC, size);
+    // BUG: reading into String_data_ptr is a segmentation fault
+    fread(text_base64.heap, 1, size, f);
+    text_base64.size = size;
+    String_print(&text_base64);
     putchar('\n');
 
-    // the text is base64, decript it first
-    String bytes = String_with_cap(WC_LIBC, size);
-    base64_decode(StrView_over_String(&text), &bytes);
-    String_print(&bytes);
-    putchar('\n');
+    // decode base64
+    String text_bytes = String_with_cap(WC_LIBC, size);
+    base64_decode(StrView_over_String(&text_base64), &text_bytes);
+    StrView text = StrView_over_String(&text_bytes);
 
-    // find the keysize using bitwise edit distance
-    u8 keysize = find_key_size(StrView_over_String(&text));
-
-    // divide whole text into keysized blocks
-    // keysize/text.size = n (number of blocks)
-    u64       n      = (text.size / keysize); // + 1; // final block may not be complete
-    StringArr blocks = StringArr_create(keysize);
-
-    // each block is a string, so we can transform it
-    for (u64 i = 0; i < n; i += keysize) {  // keysize'd strides
-        for (u64 j = 0; j < keysize; j++) { // for each char in a block
-            // for each string in StringArr, the first one contains all the first chars of each block
-            // then the next string contains the second chars of each block and so on
-            String_append_char(&blocks.strings[j], text.heap[j + i]);
+    // find the top MAX_KEYS of potential keys. discard multiples
+    // I set max keys to 2 since more than 2 are multiples
+    float best_eds[MAX_KEYS];
+    u8    best_keys[MAX_KEYS];
+    find_keysize(text, best_eds, best_keys);
+    u8 keysize = best_keys[0];
+    for (u8 i = 0; i < MAX_KEYS; i++) {
+        if (best_keys[i] < keysize) {
+            keysize = best_keys[i];
         }
     }
 
-    String decoded = String_with_cap(WC_LIBC, keysize);
+    String* blocks = transform_blocks(text, keysize); // cleanup and free needed
 
+    // break each block as a single char xor dechiper (each blocks is encripted with one char of the key)
+    // deciphered char from blocks[i] is the ith char if the key
     String key = String_with_cap(WC_LIBC, keysize);
-    for (u64 i = 0; i < blocks.size; i++) {
-        float score;
-        u8 k;
-        find_best_key(StrView_over_String(&blocks.strings[i]), &score, &k);
-        String_append_char(&key, (char)k);
+    String decoded =
+        String_with_cap(WC_LIBC, keysize); // not needed here but decript_char_xor requires it for temp work
+
+    // find each key char of the key from each block
+    for (u8 i = 0; i < keysize; i++) {
+        char k = (char)decript_char_xor(StrView_over_String(&blocks[i]), &decoded);
+        String_append_char(&key, k);
     }
 
-    printf("\n\nFOUND IT\n\n");
-    String_print(&key);
-    printf("\n\nFOUND IT\n\n");
+    String hex_key = String_with_cap(WC_LIBC, keysize);
+    hex_encode(StrView_over_String(&key), &hex_key);
+
+    printf("FOUND THE KEY: ");
+    String_print(&hex_key);
+    putchar('\n');
 
 
-    String_destroy(&key);
+    String_destroy(&hex_key);
     String_destroy(&decoded);
-    StringArr_destroy(&blocks);
-    String_destroy(&bytes);
-    String_destroy(&text);
+    String_destroy(&key);
+    for (u8 i = 0; i < keysize; i++) {
+        String_destroy(&blocks[i]);
+    }
+    free(blocks);
+    String_destroy(&text_bytes);
+    String_destroy(&text_base64);
     fclose(f);
     return 0;
 }
+
+
+

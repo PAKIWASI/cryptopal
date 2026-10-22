@@ -64,8 +64,8 @@ How? Devise some method for "scoring" a piece of English plaintext. Character fr
 */
 
 float score_eng_text(float freq[256], u64 total_chars);
-void decode_char_xor(StrView bytes, String* decoded);
-int challenge3_run(void);
+u8  decript_char_xor(StrView bytes, String* decoded);
+int   challenge3_run(void);
 
 
 // challenge 4
@@ -78,7 +78,7 @@ Find it.
 */
 
 float score_with_key(StrView line, u8 key, String* out);
-int challenge4_run(void);
+int   challenge4_run(void);
 
 
 // challenge 5
@@ -104,7 +104,7 @@ Encrypt a bunch of stuff using your repeating-key XOR function. Encrypt your mai
 */
 
 void encript_repeated_xor(StrView text, StrView key, String* encripted);
-int challenge5_run(void);
+int  challenge5_run(void);
 
 
 // challenge 6
@@ -135,9 +135,7 @@ Here's how:
 This code is going to turn out to be surprisingly useful later on. Breaking repeating-key XOR ("Vigenere") statistically is obviously an academic exercise, a "Crypto 101" thing. But more people "know how" to break it than can actually break it, and a similar technique breaks something much more important. 
 */
 
+void  base64_decode(StrView base64, String* bytes);
 float bitwise_edit_distance(StrView s1, StrView s2);
-void base64_decode(StrView base64, String* bytes);
-void find_best_key(StrView line, float* best_score, u8* best_key);
-int challenge6_run(void);
-
-
+float avg_bitwise_edit_distance(StrView text, u32 keysize);
+int   challenge6_run(void);
