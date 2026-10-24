@@ -170,9 +170,8 @@ int challenge6_run(void)
 
     // make a string to store all the text and read in the entire file
     String text_base64 = String_with_cap(WC_LIBC, size);
-    // BUG: reading into String_data_ptr is a segmentation fault
-    fread(text_base64.heap, 1, size, f);
-    text_base64.size = size;
+    u64    riyal       = fread(String_data_ptr_unsafe(&text_base64), 1, size, f);
+    text_base64.size   = riyal;
     String_print(&text_base64);
     putchar('\n');
 

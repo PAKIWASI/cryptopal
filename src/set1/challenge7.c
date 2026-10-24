@@ -19,7 +19,7 @@ static inline void handleErrors(void)
 // - plaintext must be atleast ciphertext len + block size (128)
 u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len)
 {
-    if (len < cypher.len + 16) {
+    if (len < cypher.len + 128) {
         handleErrors();
     }
 
@@ -69,8 +69,8 @@ int challenge7_run(void)
 
     // make a string to store all the text and read in the entire file
     String cyper_b64 = String_with_cap(WC_LIBC, size);
-    fread(cyper_b64.heap, 1, size, f);
-    cyper_b64.size = size;
+    u64    riyal     = fread(String_data_ptr_unsafe(&cyper_b64), 1, size, f);
+    cyper_b64.size   = riyal;
     String_print(&cyper_b64);
     putchar('\n');
 
