@@ -90,6 +90,7 @@ add_executable(main
 
 target_include_directories(main PRIVATE include external)
 target_compile_options(main PRIVATE ${WARN_FLAGS})
+target_link_libraries(main crypto)
 
 
 
