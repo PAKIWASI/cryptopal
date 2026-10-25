@@ -158,3 +158,20 @@ Easiest way: use OpenSSL::Cipher and give it AES-128-ECB as the cipher.
 
 u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len);
 int challenge7_run(void);
+
+
+// challenge 8
+/*
+Detect AES in ECB mode
+
+In this file(data/challenge8.txt) are a bunch of hex-encoded ciphertexts.
+
+One of them has been encrypted with ECB.
+
+Detect it.
+
+Remember that the problem with ECB is that it is stateless and deterministic; the same 16 byte plaintext block will always produce the same 16 byte ciphertext. 
+*/
+
+int challenge8_run(void);
+
