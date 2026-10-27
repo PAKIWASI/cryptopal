@@ -24,5 +24,5 @@ So: pad any block to a specific block length, by appending the number of bytes o
 "YELLOW SUBMARINE\x04\x04\x04\x04"
 */
 
-void pad_pkcs7(String* block, u64 block_len);
+void pad_pkcs7(String* block, u8 block_len);
 int challenge9_run(void);
