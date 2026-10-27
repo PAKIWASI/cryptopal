@@ -17,10 +17,11 @@ static inline void handleErrors(void)
 // decrypt cipher using key and iv, store result in plaintext
 // - key MUST be NUL terminated
 // - plaintext must be atleast ciphertext len + block size (128)
-u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len)
+u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len, bool padding)
 {
-    if (len < cypher.len + 128) {
-        handleErrors();
+    WC_ASSERT(key.len == 16, "wrong key len for AES 128");
+    if (padding) {
+        WC_ASSERT(len >= cypher.len + 16, );
     }
 
     // create and init the context
@@ -28,6 +29,8 @@ u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len)
     if (!ctx) {
         handleErrors();
     }
+
+    EVP_CIPHER_CTX_set_padding(ctx, (int)padding);
 
     // Initialize the decryption operation with the key and IV
     // we are doing AES with 128 bit block size in ECB mode
@@ -85,7 +88,7 @@ int challenge7_run(void)
     u8 plaintext[nKB(4)];
 
     // use libcrypto to decript ecb
-    u64 read = decrypt_aes_128_ecb(cypher, StrView_over_cstr(key), plaintext, nKB(4));
+    u64 read = decrypt_aes_128_ecb(cypher, StrView_over_cstr(key), plaintext, nKB(4), true);
     WC_ASSERT(read < sizeof plaintext, "invalid read");
     plaintext[read] = '\0';
 

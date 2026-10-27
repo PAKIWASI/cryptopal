@@ -4,6 +4,7 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -72,7 +73,7 @@ u64 encrypt_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len, boo
 //     u64 read = decrypt_aes_128_ecb(             //
 //         StrView_over_cstr((const char*)cypher), //
 //         StrView_over_cstr(key),                 //
-//         plain_2, nKB(4)                         //
+//         plain_2, nKB(4), true                   //
 //     );
 //     plain_2[read] = '\0';
 //     printf("\n\n PLAINTEXT: %s", plain_2);
@@ -94,6 +95,7 @@ void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cyp
 {
     WC_ASSERT(key.len == 16, "wrong key length for AES-128");
     WC_ASSERT(iv.len == 16, "wrong IV length for AES-128");
+    String_clear(cypher);
 
     // register that holds the last encrypted block to be xored with the next one before encryption
     u8 reg[16];
@@ -142,6 +144,29 @@ void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cyp
 }
 
 
+void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaintext)
+{
+    WC_ASSERT(key.len == 16, "wrong key length for AES-128");
+    WC_ASSERT(iv.len == 16, "wrong IV length for AES-128");
+    String_clear(plaintext);
+
+    // register that holds the last encrypted block to be xored with the next one before encryption
+    u8 reg[16];
+    memcpy(reg, iv.data, 16); // it initially holds iv
+    StrView reg_sv = StrView_over_buf((const char*)reg, 16);
+
+    // fixed xor output: reg ^ plaintext block
+    u8 xored[16];
+
+    // ecb decryption output
+    u8 p[16];
+
+    // cypher len should be a multiple of the block size 16
+    WC_ASSERT(cypher.len % 16 == 0, "cbc encrypted text not a multiple of block len");
+
+}
+
+
 int challenge10_run(void)
 {
     const char* text   = "YELLOW SUBMARINE YELLOW SUBMARINE"; // 33 bytes
@@ -149,10 +174,11 @@ int challenge10_run(void)
     const char  iv[16] = {0}; // all ascii zeros
 
     String cypher = String_with_cap(WC_LIBC, 64);
-
     encrypt_aes_128_cbc(StrView_over_cstr(text), StrView_over_cstr(key), StrView_over_buf(iv, 16), &cypher);
-
     String_print(&cypher);
+    putchar('\n');
+
+
 
     String_destroy(&cypher);
     return 0;

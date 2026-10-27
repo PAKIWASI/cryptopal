@@ -157,7 +157,7 @@ Decrypt it. You know the key, after all.
 Easiest way: use OpenSSL::Cipher and give it AES-128-ECB as the cipher. 
 */
 
-u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len);
+u64 decrypt_aes_128_ecb(StrView cypher, StrView key, u8* plaintext, u64 len, bool padding);
 int challenge7_run(void);
 
 
