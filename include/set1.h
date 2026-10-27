@@ -44,7 +44,8 @@ If your function works properly, then when you feed it the string:
 746865206b696420646f6e277420706c6179
 */
 void hex_encode(StrView bytes, String* hex);
-void fixed_xor(StrView bytes1, StrView bytes2, String* xored);
+// void fixed_xor(StrView bytes1, StrView bytes2, String* xored);
+void fixed_xor(StrView bytes1, StrView bytes2, u8* xored, u64 xlen);
 int  challenge2_run(void);
 
 

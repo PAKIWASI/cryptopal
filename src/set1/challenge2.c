@@ -2,6 +2,7 @@
 #include "views_single.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -21,10 +22,11 @@ void hex_encode(StrView bytes, String* hex)
 
 
 // do 64 bit xor at a time
-void fixed_xor(StrView bytes1, StrView bytes2, String* xored)
+void fixed_xor(StrView bytes1, StrView bytes2, u8* xored, u64 xlen)
 {
     WC_ASSERT(bytes1.len == bytes2.len, );
-    String_clear(xored);
+    WC_ASSERT(xlen >= bytes1.len, );
+    // String_clear(xored);
 
     u64 i = 0;
     for (; i + 7 < bytes1.len; i += 8) {
@@ -32,11 +34,13 @@ void fixed_xor(StrView bytes1, StrView bytes2, String* xored)
         memcpy(&b1, bytes1.data + i, 8);
         memcpy(&b2, bytes2.data + i, 8);
         u64 x = b1 ^ b2; // store 8 bytes at once
-        String_append_multi(xored, (const char*)&x, sizeof(x));
+        // String_append_multi(xored, (const char*)&x, sizeof(x));
+        memcpy(xored + i, &x, sizeof(x));
     }
     // process remaining
     for (; i < bytes1.len; i++) {
-        String_append_char(xored, (char)(bytes1.data[i] ^ bytes2.data[i]));
+        // String_append_char(xored, (char)(bytes1.data[i] ^ bytes2.data[i]));
+        xored[i] = (u8)(bytes1.data[i] ^ bytes2.data[i]);
     }
 }
 
@@ -60,13 +64,14 @@ int challenge2_run(void)
     String_print(&raw2);
     putchar('\n');
 
-    String xored = String_with_cap(WC_LIBC, String_len(&raw1));
-    fixed_xor(StrView_over_String(&raw1), StrView_over_String(&raw2), &xored);
-    String_print(&xored);
+    u64 xlen = String_len(&raw1);
+    u8* xored = malloc(xlen);
+    fixed_xor(StrView_over_String(&raw1), StrView_over_String(&raw2), xored, xlen);
+    StrView_print(StrView_over_buf((const char*)xored, xlen));
     putchar('\n');
 
-    String hex = String_with_cap(WC_LIBC, String_len(&xored) * 2);
-    hex_encode(StrView_over_String(&xored), &hex);
+    String hex = String_with_cap(WC_LIBC, xlen * 2);
+    hex_encode(StrView_over_buf((const char*)xored, xlen), &hex);
     String_print(&hex);
     putchar('\n');
 
@@ -74,7 +79,7 @@ int challenge2_run(void)
     String_destroy(&input2);
     String_destroy(&raw1);
     String_destroy(&raw2);
-    String_destroy(&xored);
+    free(xored);
     String_destroy(&hex);
     return 0;
 }

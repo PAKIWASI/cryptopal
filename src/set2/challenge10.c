@@ -5,6 +5,7 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <stdlib.h>
+#include <string.h>
 
 static inline void handleErrors(void)
 {
@@ -12,10 +13,11 @@ static inline void handleErrors(void)
     abort();
 }
 
-u64 encript_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len)
+u64 encrypt_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len, bool padding)
 {
-    if (len < plaintext.len + 128) {
-        handleErrors();
+    WC_ASSERT(key.len == 16, "wrong key len for AES 128");
+    if (padding) {
+        WC_ASSERT(len >= plaintext.len + 16, ); // 16 bytes (128 bits)
     }
 
     // create and init the context
@@ -23,6 +25,8 @@ u64 encript_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len)
     if (!ctx) {
         handleErrors();
     }
+
+    EVP_CIPHER_CTX_set_padding(ctx, (int)padding);
 
     // Initialize the decryption operation with the key and IV
     // we are doing AES with 128 bit block size in ECB mode
@@ -86,14 +90,70 @@ Continue the process until all plaintext blocks have been processed by feeding t
 
 IV data is XORed with the first decrypted ciphertext block in order to decrypt it. In order to decrypt the next ciphertext block, the previous ciphertext block is added as well into the register that replaces IV.
 */
+void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cypher)
+{
+    WC_ASSERT(key.len == 16, "wrong key length for AES-128");
+    WC_ASSERT(iv.len == 16, "wrong IV length for AES-128");
 
+    // register that holds the last encrypted block to be xored with the next one before encryption
+    u8 reg[16];
+    memcpy(reg, iv.data, 16); // it initially holds iv
+    StrView reg_sv = StrView_over_buf((const char*)reg, 16);
+
+    // fixed xor output: reg ^ plaintext block
+    u8 xored[16];
+
+    // ecb encryption output
+    u8 c[16];
+
+    // Number of full 16-byte blocks. The tail is always 0..15 bytes.
+    u64 full = plaintext.len - (plaintext.len % 16);
+
+    for (u64 i = 0; i < full; i += 16) {
+        // first we xor the prev cyphered block (the value in reg) with the plaintext block
+        fixed_xor(reg_sv, StrView_slice(plaintext, i, 16), xored, 16);
+        // encrypt that xored output
+        u64 w = encrypt_aes_128_ecb(StrView_over_buf((const char*)xored, 16), key, c, sizeof c, false);
+        WC_ASSERT(w == 16, "ECB with padding off must emit 16B");
+        // add the encrypted block to the cypher output
+        String_append_multi(cypher, (const char*)c, 16);
+        // update the register with this encrypted block
+        memcpy(reg, c, 16);
+    }
+
+    // Final block: build the padded 16-byte block, XOR with reg, encrypt no-pad.
+    u64    left = plaintext.len - full;
+    String tail = String_with_cap(WC_LIBC, 16);
+    if (left) {
+        String_append_multi(&tail, plaintext.data + full, left);
+    }
+    // pad the rest (pkcs7).
+    pad_pkcs7(&tail, 16);
+    WC_ASSERT(String_len(&tail) == 16, ); // we should always get 16 length as left is b/w 0..15
+
+    fixed_xor(reg_sv, StrView_over_String(&tail), xored, 16);
+
+    u64 w = encrypt_aes_128_ecb(StrView_over_buf((const char*)xored, 16), key, c, sizeof c, false);
+    WC_ASSERT(w == 16, "final CBC block must be exactly 16B");
+
+    String_append_multi(cypher, (const char*)c, 16);
+
+    String_destroy(&tail);
+}
 
 
 int challenge10_run(void)
 {
+    const char* text   = "YELLOW SUBMARINE YELLOW SUBMARINE"; // 33 bytes
+    const char* key    = "YELLOW SUBMARINE";
+    const char  iv[16] = {0}; // all ascii zeros
 
+    String cypher = String_with_cap(WC_LIBC, 64);
+
+    encrypt_aes_128_cbc(StrView_over_cstr(text), StrView_over_cstr(key), StrView_over_buf(iv, 16), &cypher);
+
+    String_print(&cypher);
+
+    String_destroy(&cypher);
     return 0;
 }
-
-
-

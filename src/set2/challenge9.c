@@ -18,7 +18,10 @@ void pad_pkcs7(String* block, u8 block_len)
     u8 to_pad = (mod_len == 0) ? block_len : block_len - mod_len;
 
     // append `to_pad` number of bytes to block, all with value `to_pad`
-    String_reserve_char(block, String_len(block) + to_pad, (char)to_pad);
+    String_reserve(block, String_len(block) + to_pad);
+    for (u8 i = 0; i < to_pad; i++) {
+        String_append_char(block, (char)to_pad);
+    }
 }
 
 
