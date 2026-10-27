@@ -51,7 +51,6 @@ u64 encript_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len)
     return (u64)out_len + (u64)final_len;
 }
 
-
 // static void test_encript_decript(void)
 // {
 //     const char* plaintext = "hello im wasi ullah satti!";
@@ -76,9 +75,30 @@ u64 encript_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len)
 //     printf("\n\n PLAINTEXT: %s", plain_2);
 // }
 
+
+/*
+    We need to look for repeated windows in the cyphertext. I'm gonna look for 16-bit windows
+    using HashSet
+*/
+bool is_line_aes_ecb(StrView cypherline, HashMap* map, u64 window_len)
+{
+    HashMap_clear(map);
+
+    for (u64 i = 0; i < cypherline.len - window_len; i++) {
+        StrView win = StrView_slice(cypherline, i, window_len);
+
+        if (HashMap_put(map, &win, NULL)) { // we have seen this window before: a repetition
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 int challenge8_run(void)
 {
-    FILE* f = fopen("data/challenge7.txt", "r");
+    FILE* f = fopen("data/challenge8.txt", "r");
     FATAL_IF(!f, "could not open challenge7.txt");
 
     // get file size
@@ -87,20 +107,42 @@ int challenge8_run(void)
     fseek(f, 0, SEEK_SET);
     printf("File Size: %lu\n", size);
 
-    // make a string to store all the text and read in the entire file
-    String cypher_b64 = String_with_cap(WC_LIBC, size);
-    u64    riyal      = fread(String_data_ptr_unsafe(&cypher_b64), 1, size, f);
-    cypher_b64.size   = riyal;
-    String_print(&cypher_b64);
-    putchar('\n');
 
-    String cypher_bin = String_with_cap(WC_LIBC, size);
-    base64_decode(StrView_over_String(&cypher_b64), &cypher_bin);
-    StrView cypher = StrView_over_String(&cypher_bin);
+    // hashset init
+    HashMap set = HashMap_create(WC_LIBC, sizeof(StrView), 0, wc_strview_hash, wc_strview_cmp, NULL, NULL);
+
+    String bytes = String_with_cap(WC_LIBC, 512);
+    char   line[512];
+    u64    line_no = 0;
+
+    while (fgets(line, sizeof(line), f)) {
+        line_no++;
+
+        // strip trailing newline(s)
+        u64 n = 0;
+        while (line[n] != '\0') {
+            n++;
+        }
+        while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) {
+            line[--n] = '\0';
+        }
+        if (n == 0) {
+            continue;
+        }
+
+        // hex decode
+        hex_decode(StrView_over_cstr(line), &bytes);
+
+        // check if line is aes-ecb
+        if (is_line_aes_ecb(StrView_over_String(&bytes), &set, 16)) {
+            printf("\n\nFOUND THE AES ECB ENCRIPTED LINE AT: %lu\n%s\n", line_no, line);
+            break;
+        }
+    }
 
 
-    String_destroy(&cypher_bin);
-    String_destroy(&cypher_b64);
+    String_destroy(&bytes);
+    HashMap_destroy(&set);
     fclose(f);
     return 0;
 }
