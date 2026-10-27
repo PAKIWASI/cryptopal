@@ -5,5 +5,6 @@
 
 int set2_run(void)
 {
-    return challenge9_run();
+    // return challenge9_run();
+    return challenge10_run();
 }
