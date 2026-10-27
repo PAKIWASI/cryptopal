@@ -178,3 +178,4 @@ int challenge3_run(void)
     String_destroy(&decoded);
     return 0;
 }
+

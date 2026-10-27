@@ -153,7 +153,7 @@ int challenge1_run(void)
     String_print(&hex);
     putchar('\n');
 
-    // decoded hex into raw bytes (used char for convinence)
+    // decoded hex into raw bytes
     String bytes = String_with_cap(WC_LIBC, String_len(&hex));
     hex_decode(StrView_over_String(&hex), &bytes);
     String_print(&bytes);
