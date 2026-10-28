@@ -45,8 +45,9 @@ The file here is intelligible (somewhat) when CBC decrypted against "YELLOW SUBM
 */
 
 u64 encrypt_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len, bool padding);
-// TODO:
 void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cypher); // 128 BITS = 16 byte window
 void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaintext);
-
 int challenge10_run(void);
+
+
+

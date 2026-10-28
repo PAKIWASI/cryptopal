@@ -182,22 +182,37 @@ void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaint
 
 int challenge10_run(void)
 {
-    const char* text   = "YELLOW SUBMARINE YELLOW SUBMARINE"; // 33 bytes
+    FILE* f = fopen("data/challenge10.txt", "r");
+    FATAL_IF(!f, "could not open challenge7.txt");
+
+    // get file size
+    fseek(f, 0, SEEK_END);
+    u64 size = (u64)ftell(f);
+    fseek(f, 0, SEEK_SET);
+    printf("File Size: %lu\n", size);
+
+    // make a string to store all the text and read in the entire file
+    String cyper_b64 = String_with_cap(WC_LIBC, size);
+    u64    riyal     = fread(String_data_ptr_unsafe(&cyper_b64), 1, size, f);
+    cyper_b64.size   = riyal;
+    String_print(&cyper_b64);
+    putchar('\n');
+
+    // decode base64
+    String cypher_bin = String_with_cap(WC_LIBC, size);
+    base64_decode(StrView_over_String(&cyper_b64), &cypher_bin);
+    StrView cypher = StrView_over_String(&cypher_bin);
+
     const char* key    = "YELLOW SUBMARINE";
     const char  iv[16] = {0}; // all ascii zeros
 
-    String cypher = String_with_cap(WC_LIBC, 64);
-    encrypt_aes_128_cbc(StrView_over_cstr(text), StrView_over_cstr(key), StrView_over_buf(iv, 16), &cypher);
-    String_print(&cypher);
-    putchar('\n');
-
-    String plaintext = String_with_cap(WC_LIBC, 64);
-    decrypt_aes_128_cbc(StrView_over_String(&cypher), StrView_over_cstr(key), StrView_over_buf(iv, 16), &plaintext);
+    String plaintext = String_with_cap(WC_LIBC, 1024);
+    decrypt_aes_128_cbc(cypher, StrView_over_cstr(key), StrView_over_buf(iv, sizeof iv), &plaintext);
     String_print(&plaintext);
-    putchar('\n');
-
 
     String_destroy(&plaintext);
-    String_destroy(&cypher);
+    String_destroy(&cypher_bin);
+    String_destroy(&cyper_b64);
+    fclose(f);
     return 0;
 }
