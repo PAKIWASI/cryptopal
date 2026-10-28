@@ -1,3 +1,4 @@
+#include "random_single.h"
 #include "views_single.h"
 
 
@@ -41,10 +42,10 @@ Implement CBC mode by hand by taking the ECB function you wrote earlier, making 
 The file here is intelligible (somewhat) when CBC decrypted against "YELLOW SUBMARINE" with an IV of all ASCII 0 (\x00\x00\x00 &c)
 */
 
-u64 encrypt_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len, bool padding);
+u64  encrypt_aes_128_ecb(StrView plaintext, StrView key, u8* cypher, u64 len, bool padding);
 void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cypher); // 128 BITS = 16 byte window
 void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaintext);
-int challenge10_run(void);
+int  challenge10_run(void);
 
 
 // challenge 11
@@ -69,7 +70,11 @@ Now, have the function choose to encrypt under ECB 1/2 the time, and under CBC t
 Detect the block cipher mode the function is using each time. You should end up with a piece of code that, pointed at a block box that might be encrypting ECB or CBC, tells you which one is happening.
 */
 
-int challenge11_run(void);
+// TODO:
+void generate_random_aes_128_key(WC_Pcg32* rng, u8 k[16]);
+void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher);
+void detect_rand_block_cypher_mode(StrView cypher);
+int  challenge11_run(void);
 
 
 
