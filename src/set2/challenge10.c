@@ -95,6 +95,7 @@ void encrypt_aes_128_cbc(StrView plaintext, StrView key, StrView iv, String* cyp
 {
     WC_ASSERT(key.len == 16, "wrong key length for AES-128");
     WC_ASSERT(iv.len == 16, "wrong IV length for AES-128");
+
     String_clear(cypher);
 
     // register that holds the last encrypted block to be xored with the next one before encryption
@@ -148,12 +149,15 @@ void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaint
 {
     WC_ASSERT(key.len == 16, "wrong key length for AES-128");
     WC_ASSERT(iv.len == 16, "wrong IV length for AES-128");
+    // cypher len should be a multiple of the block size 16
+    WC_ASSERT(cypher.len % 16 == 0, "cbc encrypted text not a multiple of block len");
+
     String_clear(plaintext);
 
     // register that holds the last encrypted block to be xored with the next one before encryption
     u8 reg[16];
-    memcpy(reg, iv.data, 16); // it initially holds iv
-    StrView reg_sv = StrView_over_buf((const char*)reg, 16);
+    memcpy(reg, iv.data, sizeof reg); // it initially holds iv
+    StrView reg_sv = StrView_over_buf((const char*)reg, sizeof reg);
 
     // fixed xor output: reg ^ plaintext block
     u8 xored[16];
@@ -161,9 +165,18 @@ void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaint
     // ecb decryption output
     u8 p[16];
 
-    // cypher len should be a multiple of the block size 16
-    WC_ASSERT(cypher.len % 16 == 0, "cbc encrypted text not a multiple of block len");
-
+    for (u64 i = 0; i < cypher.len; i += 16) {
+        // first decrypt the cypher block
+        u64 r = decrypt_aes_128_ecb(StrView_slice(cypher, i, 16), key, p, sizeof p, false);
+        WC_ASSERT(r == 16, "ECB with padding off must emit 16B");
+        // then xor with the register containing the last cypher block or iv
+        fixed_xor(StrView_over_buf((const char*)p, 16), reg_sv, xored, sizeof xored);
+        // write the decypered block to the plaintext output
+        String_append_multi(plaintext, (const char*)xored, sizeof xored);
+        // write the cypher block into reg, it will be xored with the next block's decryption output
+        memcpy(reg, cypher.data + i, 16);
+    }
+    // there should be any left
 }
 
 
@@ -178,8 +191,13 @@ int challenge10_run(void)
     String_print(&cypher);
     putchar('\n');
 
+    String plaintext = String_with_cap(WC_LIBC, 64);
+    decrypt_aes_128_cbc(StrView_over_String(&cypher), StrView_over_cstr(key), StrView_over_buf(iv, 16), &plaintext);
+    String_print(&plaintext);
+    putchar('\n');
 
 
+    String_destroy(&plaintext);
     String_destroy(&cypher);
     return 0;
 }
