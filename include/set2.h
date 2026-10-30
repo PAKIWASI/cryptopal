@@ -72,7 +72,7 @@ Detect the block cipher mode the function is using each time. You should end up 
 
 // TODO:
 void generate_random_aes_128_key(WC_Pcg32* rng, u8 k[16]);
-void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher);
+void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView key);
 void detect_rand_block_cypher_mode(StrView cypher);
 int  challenge11_run(void);
 

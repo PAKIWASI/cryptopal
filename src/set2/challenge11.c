@@ -1,6 +1,7 @@
 #include "random_single.h"
 #include "set2.h"
 #include "views_single.h"
+
 #include <assert.h>
 #include <stdio.h>
 
@@ -14,12 +15,8 @@ void generate_random_aes_128_key(WC_Pcg32* rng, u8 k[16])
     ((u32*)k)[3] = pcg32_rand(rng); // 12-15
 }
 
-void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher)
+void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView key)
 {
-    // gen 128-bit key
-    u8 key[16];
-    generate_random_aes_128_key(rng, key);
-
     // find out how many random bytes (5-10) to add before and after the plaintext
     u8 prepend_num  = (u8)pcg32_rand_range(rng, 5, 11);
     u8 postpend_num = (u8)pcg32_rand_range(rng, 5, 11);
@@ -68,18 +65,16 @@ void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher)
 
     bool is_cbc = (bool)pcg32_rand_bounded(rng, 2); //  0 or 1
 
-    // TODO: i think the challenge wants me to choose b/w cbc and ecb for each BLOCK,
-    // not the entire plaintext...
-
     if (is_cbc) { // encrypt using cbc
         u8 iv[16];
         generate_random_aes_128_key(rng, iv);
-        encrypt_aes_128_cbc(StrView_over_String(&pt), StrView_over_buf(key, 16), StrView_over_buf(iv, 16), cypher);
-
+        encrypt_aes_128_cbc(StrView_over_String(&pt), key, StrView_over_buf((char*)iv, 16), cypher);
     } else { // encrypt using ecb
-        String_reserve(cypher, String_len(&pt));
-        encrypt_aes_128_ecb(StrView_over_buf(String_data_ptr_unsafe(&pt), String_len(&pt)), StrView_over_buf(key, 16),
-                            String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
+        String_reserve(cypher, String_len(&pt) + 16);
+        u64 n = encrypt_aes_128_ecb(StrView_over_buf(String_data_ptr_unsafe(&pt), String_len(&pt)), key,
+                            (u8*)String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
+
+        cypher->size = n; // set the length
     }
 
     String_destroy(&pt);
@@ -89,15 +84,17 @@ void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher)
 int challenge11_run(void)
 {
     WC_Pcg32 rng = PCG32_INITIALIZER;
-    pcg32_rand_seed_time(&rng);
+    pcg32_rand_seed_os(&rng);
 
     const char* pt = "hello im wasi ullah satti";
 
+    u8 key[16];
+    generate_random_aes_128_key(&rng, key);
+
     String cypher = String_create(WC_LIBC);
-    encryption_oracle(&rng, StrView_over_cstr(pt), &cypher);
+    encryption_oracle(&rng, StrView_over_cstr(pt), &cypher, StrView_over_buf((char*)key, 16));
     String_print(&cypher);
     putchar('\n');
-
 
     String_destroy(&cypher);
     return 0;
