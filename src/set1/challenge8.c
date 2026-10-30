@@ -1,3 +1,4 @@
+#include "random_single.h"
 #include "set1.h"
 #include "views_single.h"
 
@@ -13,11 +14,11 @@
 */
 bool is_line_aes_ecb(StrView cypherline, HashMap* map, u64 window_len)
 {
+    WC_ASSERT(cypherline.len >= window_len, );
     HashMap_clear(map);
 
-    for (u64 i = 0; i < cypherline.len - window_len; i++) {
+    for (u64 i = 0; i <= cypherline.len - window_len; i++) {
         StrView win = StrView_slice(cypherline, i, window_len);
-
         if (HashMap_put(map, &win, NULL)) { // we have seen this window before: a repetition
             return true;
         }

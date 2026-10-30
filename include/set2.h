@@ -70,12 +70,9 @@ Now, have the function choose to encrypt under ECB 1/2 the time, and under CBC t
 Detect the block cipher mode the function is using each time. You should end up with a piece of code that, pointed at a block box that might be encrypting ECB or CBC, tells you which one is happening.
 */
 
-// TODO:
-void generate_random_aes_128_key(WC_Pcg32* rng, u8 k[16]);
-void encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView key);
-void detect_rand_block_cypher_mode(StrView cypher);
+wc_always_inline void generate_random_aes_128_key(u8 k[16]);
+// returns true if cbc is used, false if ecb
+bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView key);
+// returns true if cbc is used, false if ecb
+bool detect_rand_block_cypher_mode(StrView cypher, HashMap* set);
 int  challenge11_run(void);
-
-
-
-
