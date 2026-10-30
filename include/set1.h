@@ -174,6 +174,6 @@ Detect it.
 Remember that the problem with ECB is that it is stateless and deterministic; the same 16 byte plaintext block will always produce the same 16 byte ciphertext. 
 */
 
-bool is_line_aes_ecb(StrView cypherline, HashMap* map, u64 window_len);
+bool is_aes_ecb(StrView cypherline, HashMap* map, u64 window_len);
 int challenge8_run(void);
 

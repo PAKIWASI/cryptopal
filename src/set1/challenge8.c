@@ -12,7 +12,7 @@
     We need to look for repeated windows in the cyphertext. I'm gonna look for 16-bit windows
     using HashSet
 */
-bool is_line_aes_ecb(StrView cypherline, HashMap* map, u64 window_len)
+bool is_aes_ecb(StrView cypherline, HashMap* map, u64 window_len)
 {
     WC_ASSERT(cypherline.len >= window_len, );
     HashMap_clear(map);
@@ -66,7 +66,7 @@ int challenge8_run(void)
         hex_decode(StrView_over_cstr(line), &bytes);
 
         // check if line is aes-ecb
-        if (is_line_aes_ecb(StrView_over_String(&bytes), &set, 16)) {
+        if (is_aes_ecb(StrView_over_String(&bytes), &set, 16)) {
             printf("\n\nFOUND THE AES ECB ENCRIPTED LINE AT: %lu\n%s\n", line_no, line);
             break;
         }

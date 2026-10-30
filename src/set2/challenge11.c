@@ -58,7 +58,7 @@ bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView
 
 bool detect_rand_block_cypher_mode(StrView cypher, HashMap* set)
 {
-    return (!is_line_aes_ecb(cypher, set, 16)) != 0;
+    return (!is_aes_ecb(cypher, set, 16)) != 0;
 }
 
 
