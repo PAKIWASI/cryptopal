@@ -20,7 +20,7 @@ static wc_always_inline void append_rand_bytes(String* s, u8 num)
 }
 
 
-bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView key)
+bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, StrView key, String* cypher)
 {
     // find out how many random bytes (5-10) to add before and after the plaintext
     u8 prepend_num  = (u8)pcg32_rand_range(rng, 5, 11);
@@ -38,29 +38,23 @@ bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, String* cypher, StrView
     // postpend random bytes
     append_rand_bytes(&pt, postpend_num);
 
-    bool is_cbc = (bool)pcg32_rand_bounded(rng, 2); //  0 or 1
+    bool is_ecb = (bool)pcg32_rand_bounded(rng, 2); //  0 or 1
 
-    if (is_cbc) { // encrypt using cbc
+    if (is_ecb) { // encrypt using ecb
+        String_reserve(cypher, String_len(&pt) + 16);
+        u64 n        = encrypt_aes_128_ecb(StrView_over_buf(String_data_ptr_unsafe(&pt), String_len(&pt)), key,
+                                           (u8*)String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
+        cypher->size = n; // set the length
+
+    } else { // encrypt using cbc
         u8 iv[16];
         generate_random_aes_128_key(iv);
         encrypt_aes_128_cbc(StrView_over_String(&pt), key, StrView_over_buf((char*)iv, 16), cypher);
-    } else { // encrypt using ecb
-        String_reserve(cypher, String_len(&pt) + 16);
-        u64 n = encrypt_aes_128_ecb(StrView_over_buf(String_data_ptr_unsafe(&pt), String_len(&pt)), key,
-                                    (u8*)String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
-
-        cypher->size = n; // set the length
     }
 
     String_destroy(&pt);
-    return is_cbc;
+    return is_ecb;
 }
-
-bool detect_rand_block_cypher_mode(StrView cypher, HashMap* set)
-{
-    return (!is_aes_ecb(cypher, set, 16)) != 0;
-}
-
 
 
 int challenge11_run(void)
@@ -80,9 +74,9 @@ int challenge11_run(void)
     u64 wrong = 0;
 
     for (u64 i = 0; i < 100; i++) {
-        bool is_cbc = encryption_oracle(&rng, StrView_over_cstr(pt), &cypher, StrView_over_buf((char*)key, 16));
-        bool is_cbc_detected = detect_rand_block_cypher_mode(StrView_over_String(&cypher), &set);
-        if (is_cbc != is_cbc_detected) {
+        bool is_ecb = encryption_oracle(&rng, StrView_over_cstr(pt), StrView_over_buf((char*)key, 16), &cypher);
+        bool is_ecb_detected = is_aes_ecb(StrView_over_String(&cypher), &set, 16);
+        if (is_ecb != is_ecb_detected) {
             wrong++;
         }
 
