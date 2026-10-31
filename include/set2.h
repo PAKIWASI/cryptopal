@@ -70,7 +70,7 @@ Now, have the function choose to encrypt under ECB 1/2 the time, and under CBC t
 Detect the block cipher mode the function is using each time. You should end up with a piece of code that, pointed at a block box that might be encrypting ECB or CBC, tells you which one is happening.
 */
 
-wc_always_inline void generate_random_aes_128_key(u8 k[16]);
+void generate_random_aes_128_key(u8 k[16]);
 // returns true if ecb is used, false if cbc
 bool encryption_oracle(WC_Pcg32* rng, StrView plaintext, StrView key, String* cypher);
 int  challenge11_run(void);
@@ -115,7 +115,11 @@ Congratulations.
 This is the first challenge we've given you whose solution will break real crypto. Lots of people know that when you encrypt something in ECB mode, you can see penguins through it. Not so many of them can decrypt the contents of those ciphertexts, and now you can. If our experience is any guideline, this attack will get you code execution in security tests about once a year.
 */
 
-int  challenge12_run(void);
+// TODO:
+void fixed_key_oracle(StrView plaintext, StrView key, String* cypher);
+u64  find_oracle_block_size(StrView secret);
+bool is_oracle_ecb(StrView secret, u64 block_size);
+void break_secret_with_oracle(StrView secret, u64 block_size, HashMap* set);
 
 
-
+int challenge12_run(void);
