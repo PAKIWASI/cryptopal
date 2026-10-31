@@ -90,3 +90,63 @@ int challenge11_run(void)
     String_destroy(&cypher);
     return 0;
 }
+
+/*
+
+10c5d1a2bc6a3d65105fc4a71713c8b2    // 32 bytes HEX (16 byte BIN, one AES block), repeated 3x. supposed to represent 64 bytes of plaintext?
+
+*/
+
+/* Example outputs:
+
+92814b88eeb2e3ee119b00032821cf0d10c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b20d494214759112f1acd724cca8fe6a190b453c7416636a1586f2dbb440e5f50c
+
+bb7104ce5c5dbcebf23ec22cb34bc37810c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b298d8b2e03c0955c4e494d1ecaf3d1eb5
+
+cec70e772fc4649a97006e4b1175ae2b10c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b2b56e0598ad94d6549b44f61d654d8a5da37f57f07ed63c11386ad875f061a335
+
+0414f3a031055ab096badfded125169010c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b210c5d1a2bc6a3d65105fc4a71713c8b2f3be79de8f147c0f181b9cc6eeedcc0f
+*/
+
+/* as we are prepending and postpending 5-10 bytes and each block for AES is 16 bytes
+
+block 0: [p random bytes][16-p A's]   <- differs
+block 1: AAAAAAAAAAAAAAAA             <- identical
+block 2: AAAAAAAAAAAAAAAA             <- identical
+block 3: AAAAAAAAAAAAAAAA             <- identical
+block 4: [p A's][suffix][padding]     <- differs
+
+*/
+
+/*
+static int play(void)
+{
+    WC_Pcg32 rng = PCG32_INITIALIZER;
+    pcg32_rand_seed_os(&rng);
+
+    const char* pt = "AAAAAAAAAAAAAAAA"
+                     "AAAAAAAAAAAAAAAA"
+                     "AAAAAAAAAAAAAAAA"
+                     "AAAAAAAAAAAAAAAA"; // 64 bytes (4 AES-128 blocks)
+
+    const char* key = "wasi ullah satti"; // 16 bytes (1 AES-128 block)
+
+    String cypher = String_create(WC_LIBC);
+
+    encryption_oracle(&rng, StrView_over_cstr(pt), StrView_over_cstr(key), &cypher);
+
+    String hex = String_with_cap(WC_LIBC, String_len(&cypher) * 2);
+    hex_encode(StrView_over_String(&cypher), &hex);
+
+    HashMap set = HashMap_create(WC_LIBC, sizeof(StrView), 0, wc_strview_hash, wc_strview_cmp, NULL, NULL);
+
+    if (is_aes_ecb(StrView_over_String(&cypher), &set, 16)) {
+        String_print(&hex);
+    }
+
+    HashMap_destroy(&set);
+    String_destroy(&hex);
+    String_destroy(&cypher);
+    return 0;
+}
+*/
