@@ -8,13 +8,10 @@
 
 
 /*
-
 1. Block size: call the oracle with 0, 1, 2, … As. The first time the ciphertext length grows, the jump is the block size (16). Say it first jumps at i bytes from base length base: then secret_len = base - i.
 2. Confirm ECB: feed 3 * bs copies of A and check that block 0 equals block 1. Compare at step = bs (aligned blocks). Your is_aes_ecb slides one byte at a time. That works, but it does 16x more hashing and only aligned matches are meaningful.
 3. Recover each byte k.
-
 */
-
 /*
 The math for block size comes from how PKCS#7 padding rounds the ciphertext length up to the next multiple of the block size.
 
@@ -44,6 +41,15 @@ secret_len S = base - i
 block_size   = C(i) - base
 
 */
+
+void fixed_key_oracle(StrView plaintext, StrView key, String* cypher)
+{
+    String_clear(cypher);
+    u64 n = encrypt_aes_128_ecb(plaintext, key, (u8*)String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
+    cypher->size = n;
+
+
+}
 
 
 

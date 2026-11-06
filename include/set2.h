@@ -121,5 +121,7 @@ u64  find_oracle_block_size(StrView secret);
 bool is_oracle_ecb(StrView secret, u64 block_size);
 void break_secret_with_oracle(StrView secret, u64 block_size, HashMap* set);
 
-
 int challenge12_run(void);
+
+
+
