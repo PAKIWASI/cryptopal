@@ -115,12 +115,13 @@ Congratulations.
 This is the first challenge we've given you whose solution will break real crypto. Lots of people know that when you encrypt something in ECB mode, you can see penguins through it. Not so many of them can decrypt the contents of those ciphertexts, and now you can. If our experience is any guideline, this attack will get you code execution in security tests about once a year.
 */
 
-// TODO:
-void fixed_key_oracle(StrView plaintext, StrView key, String* cypher);
-u64 find_oracle_block_size(StrView key);
-bool is_oracle_ecb(HashMap* map, StrView key, u64 block_size);
+typedef struct {
+    StrView key;    // the random key
+    StrView secret; // the secret the oracle will append
+} Oracle;
+
+void fixed_key_oracle(StrView plaintext, Oracle* oracle, String* cypher);
+u64  find_oracle_block_size(Oracle* oracle);
+bool is_oracle_ecb(HashMap* map, Oracle* oracle, u64 block_size);
 
 int challenge12_run(void);
-
-
-
