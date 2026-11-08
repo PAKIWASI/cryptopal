@@ -117,9 +117,8 @@ This is the first challenge we've given you whose solution will break real crypt
 
 // TODO:
 void fixed_key_oracle(StrView plaintext, StrView key, String* cypher);
-u64  find_oracle_block_size(StrView secret);
-bool is_oracle_ecb(StrView secret, u64 block_size);
-void break_secret_with_oracle(StrView secret, u64 block_size, HashMap* set);
+u64 find_oracle_block_size(StrView key);
+bool is_oracle_ecb(HashMap* map, StrView key, u64 block_size);
 
 int challenge12_run(void);
 
