@@ -54,7 +54,7 @@ bool is_oracle_ecb(HashMap* map, StrView key, u64 block_size)
     return is_ecb;
 }
 
-static void find_byte_cypher_mapping(char map[256], StrView key, u64 block_size)
+static void find_byte_cypher_mapping(StringStore* ss, HashMap* cyphermap, StrView key, u64 block_size)
 {
     String crafted = String_with_cap(WC_LIBC, block_size);
     // craft input [A...0], [A...1], ..., [A...A], [A...B], ...,[A...a], etc
@@ -68,9 +68,12 @@ static void find_byte_cypher_mapping(char map[256], StrView key, u64 block_size)
         fixed_key_oracle(StrView_over_String(&crafted), key, &cypher);
         // input is block size aligned, we will get block_size of padding
         WC_ASSERT(String_len(&cypher) == block_size * 2, );
-        char e = String_char_at_unsafe(&cypher, block_size - 1);
-        // we have to map encrypted -> decrypted
-        map[(u8)e] = (char)i;
+        // store the key and val
+        StrView cy = StringStore_str(ss, &cypher);
+        // we have to map the entire cypher block to the entire plaintext block
+        // cypher -> plaintext's char for later lookup
+        char c = (char)i;
+        HashMap_put(cyphermap, &cy, &c);
     }
 
     String_destroy(&cypher);
@@ -111,11 +114,19 @@ int challenge12_run(void)
     String plaintext = String_with_cap(WC_LIBC, block_size);
     String_reserve_char(&plaintext, block_size, 'A'); // last char will be replaced
 
-    // byte to it's cypher representation under the rand_key
-    // obtained by repeated calls to oracle using crafted inputs: [A...A], [A...B], [A...C] etc
-    // this maps encrypted -> decrypted
-    char byte_cypher_map[256];
-    find_byte_cypher_mapping(byte_cypher_map, rkey, block_size);
+    /*
+        AES ECB encrypts the whole `block_size` block as `block_size` cyphertext (as a whole, NOT individual chars)
+        the same plaintext produces the same cyphertext. so we will map crafted plaintext block [A...A], [A...B] etc
+        to their cypher under the random key. we will store cypher block -> char for all possible 1 byte values
+        we dont need to store the entire plaintext as a value we it's the crafted input, so we know the char that made that plaintext
+    */
+    StringStore store;
+    StringStore_create(&store, WC_LIBC, nKB(1), false);
+    HashMap block_map =
+        HashMap_create(WC_LIBC, sizeof(StrView), sizeof(char), wc_strview_hash, wc_strview_cmp, NULL, NULL);
+
+    find_byte_cypher_mapping(&store, &block_map, rkey, block_size);
+    HashMap_print(&block_map, wc_strview_print, wc_print_char);
 
     // cypher output storage
     String cypher = String_with_cap(WC_LIBC, block_size);
@@ -132,15 +143,20 @@ int challenge12_run(void)
         fixed_key_oracle(StrView_over_String(&plaintext), rkey, &cypher);
         // input is block size aligned, we will get block_size of padding
         WC_ASSERT(String_len(&cypher) == block_size * 2, );
-        // decode and store the block_size - 1 char
-        String_append_char(&decyphered, byte_cypher_map[(u8)String_char_at_unsafe(&cypher, block_size - 1)]);
+        // map the cypher to the known cyper maps and decode the char
+        StrView cy = StrView_over_String(&cypher);
+        String_append_char(&decyphered, *(char*)HashMap_get_key_ptr(&block_map, &cy));
     }
 
+    putchar('\n');
     String_print(&decyphered);
+    putchar('\n');
 
 
     String_destroy(&decyphered);
     String_destroy(&cypher);
+    HashMap_destroy(&block_map);
+    StringStore_destroy(&store);
     String_destroy(&plaintext);
     String_destroy(&secret);
     String_destroy(&secret_b64);
@@ -150,36 +166,58 @@ int challenge12_run(void)
 
 
 /*
-1. Block size: call the oracle with 0, 1, 2, … As. The first time the ciphertext length grows, the jump is the block size (16). Say it first jumps at i bytes from base length base: then secret_len = base - i.
-2. Confirm ECB: feed 3 * bs copies of A and check that block 0 equals block 1. Compare at step = bs (aligned blocks)
-3. Recover each byte k.
-*/
-/*
-The math for block size comes from how PKCS#7 padding rounds the ciphertext length up to the next multiple of the block size.
+Because the attack is about recovering something you can't see, and right now your code uses the secret as an input to recover the secret.
 
-The setup
+## The scenario
 
-Let S be the secret length and i the number of As you prepend. The plaintext is i + S bytes, and with padding the ciphertext length is:
+The challenge models a service you can talk to but not look inside:
 
-C(i) = (floor((i + S) / bs) + 1) * bs
+```
+oracle(your_input) = AES-128-ECB(your_input || secret, key)
+```
 
-The + 1 is because PKCS#7 always adds at least one padding byte. If the plaintext is already block-aligned, a whole extra block of padding is added.
+- You control `your_input`.
+- You see the ciphertext.
+- You don't know `key` or `secret`.
 
-So the ciphertext length only changes when i + S crosses a multiple of bs.
+The goal is to recover `secret`. The secret is appended **by the oracle**, not by you. That is the whole point: your input and the secret end up in the same plaintext, so they share blocks.
 
-Finding the jump
+## Why that matters: a small example
 
-Let base = C(0), the ciphertext length with no input. Increase i one at a time. The first i where C(i) > base is the point where i + S first hits a multiple of bs, because that’s when padding needs a whole new block.
+Use a block size of 4 and the secret `HELLO` (which you don't know).
 
-At that point:
+You send 3 bytes, `AAA`. The oracle encrypts `AAAHELLO` plus padding:
 
-i + S = base      (the plaintext now fills `base` bytes exactly, plus one full block of padding)
+```
+plaintext blocks:  [A A A H] [E L L O] [pad...]
+```
 
-Check this: at i + S = base, the plaintext is block-aligned, so padding adds a full block and the length becomes base + bs. One byte earlier (i - 1), i - 1 + S = base - 1, which pads with exactly one byte and gives length base. So the jump happens exactly at the i where i + S = base.
+The first ciphertext block is `E(AAAH)`. You know three of its four plaintext bytes, and the fourth is the first byte of the secret.
 
-Therefore:
+Now ask the oracle about each candidate yourself: send `AAAA`, `AAAB`, `AAAC`, ..., and look at the first ciphertext block each time. ECB is deterministic, so identical plaintext blocks produce identical ciphertext blocks. When you send `AAAH`, the first block equals the target block from before. A match means the unknown byte is `H`.
 
-secret_len S = base - i
-block_size   = C(i) - base
+For the next byte, send 2 bytes, `AA`:
+
+```
+[A A H E] [L L O pad]
+```
+
+You now know `H`, so you try `AAH` + each candidate and match against the first block. You get `E`. Shrinking the prefix slides the secret left, one byte at a time, so there is always exactly one unknown byte in the block you're attacking. That is why the secret has to be appended: your prefix length controls where the secret's bytes land relative to block boundaries.
+
+## What your code does instead
+
+```c
+String_set_char(&plaintext, block_size - 1, String_char_at_unsafe(&secret, i));
+```
+
+The attack loop reads `secret[i]` directly and puts it into the plaintext. Then it encrypts, looks the ciphertext up in a table of all 256 candidates, and gets back... `secret[i]`. It's a round trip through AES that returns the byte you started with.
+
+It would "work" with any deterministic function in the middle, even a broken one, because the answer is never hidden from the attack code. The cryptography isn't being broken, since there's nothing secret left to break.
+
+## What changes
+
+The secret lives inside the oracle function, and the attack code never touches it. The only thing the attack code can do is call `oracle(prefix)` and look at the output. The attack then has to infer `secret[i]` using only the ciphertext matching trick above.
+
+A side effect is that the ciphertext length also leaks the secret's length. Since padding adds up to a block, the first prefix length that makes the output jump by one block tells you `len(secret)` mod `block_size`, and you can work out the rest from there. This is the same trick your `find_oracle_block_size` already uses.
 
 */
