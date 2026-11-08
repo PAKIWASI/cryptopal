@@ -86,8 +86,8 @@ static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* p
     // one byte will be appended to plaintext and we need to brute force all possible combinations of plaintext
     // then we store the cypherblock -> last char mapping for later decoding
 
-    // printable ascii range
-    for (u8 i = 32; i < 128; i++) {
+    // printable ascii range + control chars
+    for (u8 i = 0; i < 128; i++) {
         // set the (block_size - 1)th char
         String_set_char(&crafted, plaintext.len, (char)i);
         StrView pt = StringStore_str(ss, &crafted); // storage for ptset
@@ -99,6 +99,7 @@ static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* p
 
         fixed_key_oracle(StrView_over_String(&crafted), oracle, &cypher);
 
+        // BUG: 2. The dictionary key is the whole ciphertext, not one block
         StrView ct = StringStore_str(ss, &cypher); // storage for ctmap
         if (!HashMap_has(ctmap, &ct)) {
             // cypher block -> last char of crafted block (variable)
@@ -168,12 +169,17 @@ int challenge12_run(void)
     String cypher = String_with_cap(WC_LIBC, block_size);
 
     u64 off = 0; // window offset
+    // BUG: need to figure out offset wrapping and how to mis-align subsequent blocks by 1
+    // need to store the output seperately and and only need to send to the oracle a
+    // string with all A's (block_size - 1), then one less and so on
+    // when it reaches 0, reset to (block_size - 1) (offset % block_size wrapping)
 
-    while (off < 100) {
+    while (true) { // TODO: condition: hashmap_get
         StrView pt = StrView_over_String_ex(&plaintext, off, block_size - 1); // one less then block size
 
+        // BUG:is_oracle_ecb(&set, …) fills set with views into As and cypher, which are destroyed before it returns. You then reuse set as ptset, so it holds dangling keys. Use a fresh map for ptset, or clear set after the ECB check
         find_byte_cypher_mapping(&store, &block_map, &set, &oracle, pt);
-        fixed_key_oracle(pt, &oracle, &cypher);
+        fixed_key_oracle(StrView_over_String(&plaintext), &oracle, &cypher);
 
         StrView ct = StrView_over_String_ex(&cypher, off, block_size); // get the WHOLE block
         char    c;
