@@ -2,7 +2,7 @@
 #include "set2.h"
 
 
-SSFfint main(void)
+int main(void)
 {
     // return set1_run();
     return set2_run();

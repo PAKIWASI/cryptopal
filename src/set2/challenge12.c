@@ -4,7 +4,7 @@
 #include "views_single.h"
 
 #include <stdio.h>
-
+#include <string.h>
 
 
 
@@ -66,20 +66,12 @@ bool is_oracle_ecb(HashMap* map, Oracle* oracle, u64 block_size)
     return is_ecb;
 }
 
-// TODO:
-// we need to append the each decoded char back to the plaintext and slide the window forward
-// this function is not what we need
-// we need a function that gives us all the possible mappings for any plaintext that has some char appended to it's end
-// that way, when we feed it the sliding window of 15 known chars, we want to know the possible cypherblock mappings
-// with the last char included.
-// This will be called once per iteration in the main decoding loop, for each char we need to decode
 // we should also cache plaintext blocks to avoid redundent calls to oracle, also use interned string store
 static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* ptset, Oracle* oracle, StrView plaintext)
 {
     u64 block_size = plaintext.len + 1;
     // appended plaintext storage
-    String crafted = String_with_cap(WC_LIBC, block_size);
-    String_append_multi(&crafted, plaintext.data, block_size - 1);
+    String crafted = StrView_to_String(WC_LIBC, plaintext);
     String_append_char(&crafted, 'A'); // temp fil in to set size to block_size
     // cypher output storage
     String cypher = String_with_cap(WC_LIBC, block_size * 2); // plaintext.len == block_size - 1
@@ -124,12 +116,12 @@ int challenge12_run(void)
     generate_random_aes_128_key(rand_key);
 
     // the secret we wanna find out (base64)
-    String secret_b64 = String_from_cstr(
-        WC_LIBC, "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzd"
-                 "GFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK");
+    const char* secret_b64 =
+        "Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkgaGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzd"
+        "GFuZGJ5IHdhdmluZyBqdXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUgYnkK";
     // decode base64
-    String secret = String_with_cap(WC_LIBC, String_len(&secret_b64));
-    base64_decode(StrView_over_String(&secret_b64), &secret);
+    String secret = String_with_cap(WC_LIBC, strlen(secret_b64));
+    base64_decode(StrView_over_cstr(secret_b64), &secret);
 
     Oracle oracle = {
         .key    = StrView_over_buf((char*)rand_key, 16),
@@ -162,55 +154,57 @@ int challenge12_run(void)
         and append it to the plaintext. now we slide the window forward and repeat
     */
 
-    // plaintext accumulator
-    String ptpad = String_with_cap(WC_LIBC, block_size - 1);
-    String_reserve_char(&ptpad, block_size - 1, 'A');
+    // known stores the decoded bytes of the secret
+    // it starts off as padding of block_size - 1
+    String known = String_with_cap(WC_LIBC, 256);
+    String_reserve_char(&known, block_size - 1, 'A');
     // oracle output storage
     String cypher = String_with_cap(WC_LIBC, block_size);
-    // final decoded secret storage
-    String plaintext = String_with_cap(WC_LIBC, block_size);
     // plaintext set for caching blocks
-    HashMap ptset = HashMap_create(WC_LIBC, sizeof(StrView), sizeof(char), wc_strview_hash, wc_strview_cmp, NULL, NULL);
+    HashMap ptset = HashMap_create(WC_LIBC, sizeof(StrView), 0, wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
-    u64 off = 0; // window offset
+    for (u64 off = 0;; off++) {
+        // pad only view for the oracle to align blocks
+        u64     pad_len = block_size - 1 - (off % block_size); // 15...0 to 15...0 and so on
+        StrView pad     = StrView_over_String_ex(&known, 0, pad_len);
 
-    while (true) {
-        // out cypher input ranges from 15 A's to 1 A and again we wrap around to 15 A's
-        // 15 A's makes it so secret's first char is the last char of the block
-        // after we decode it, we want to make it so the second secret char is also in the first block,
-        // hence we decrease our input by one. when we have the whole first block decoded, we move the
-        // the next one, so we will need 15 A's again, so second block's last char is the next secret char
-        StrView pt = StrView_over_String_ex(&ptpad, 0,
-                                            block_size - 1 - (off % (block_size - 1))); // goes from 15...1...15...1 etc
+        fixed_key_oracle(pad, &oracle, &cypher);
 
-        find_byte_cypher_mapping(&store, &block_map, &ptset, &oracle, pt);
-        // TODO: pt only has the pad, we need to add cypher decoded chars to it as well
+        // off has to be rounded down to a multiple of the block size
+        u64     blk = (off / block_size) * block_size;
+        StrView ct  = StrView_over_String_ex(&cypher, blk, block_size);
 
-        fixed_key_oracle(StrView_over_String(&ptpad), &oracle, &cypher);
+        /*
+            dictionary maps encrypt(P) to a byte, where P is exactly one 16-byte plaintext block.
+            For a lookup to hit, the slice you read from the target ciphertext has to be one whole encrypted block,
+            which means it must start at a multiple of 16.
 
-        StrView ct = StrView_over_String_ex(&cypher, off, block_size); // get the WHOLE block
-        char    c;
-        // get the char that mapped this cypher block
+            Which block you read: blk = (off / bs) * bs. This only moves forward every 16 decoded bytes.
+            Where the secret byte sits inside that block: this is controlled by the pad length, bs - 1 - (off % bs). It slides the secret left one byte at a time, so the byte you want is always the last byte of the block you read.
+        */
+
+        // last block_size - 1 bytes and every candidate byte for the dictionary
+        StrView prefix = StrView_over_String_ex(&known, known.size - (block_size - 1), block_size - 1);
+        find_byte_cypher_mapping(&store, &block_map, &ptset, &oracle, prefix);
+
+        char c;
         if (!HashMap_get(&block_map, &ct, &c)) {
-            break; //
+            break;
         }
-
-        // append that char to the plaintext
-        String_append_char(&plaintext, c);
-        off++; // slide window
+        String_append_char(&known, c);
     }
+    // decoded secret = known[block_size-1 ..]; drop the trailing 0x01
 
-    String_print(&plaintext);
+    String_print(&known);
+
 
 
     HashMap_destroy(&ptset);
-    String_destroy(&plaintext);
+    String_destroy(&known);
     String_destroy(&cypher);
-    String_destroy(&ptpad);
     HashMap_destroy(&block_map);
     StringStore_destroy(&store);
     HashMap_destroy(&set);
     String_destroy(&secret);
-    String_destroy(&secret_b64);
     return 0;
 }
