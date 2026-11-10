@@ -3,8 +3,9 @@
 #include "set2.h"
 #include "views_single.h"
 
-#include <iso646.h>
 #include <stdio.h>
+
+
 
 
 void fixed_key_oracle(StrView plaintext, Oracle* oracle, String* cypher)
@@ -12,8 +13,7 @@ void fixed_key_oracle(StrView plaintext, Oracle* oracle, String* cypher)
     String_clear(cypher);
     String_reserve(cypher, plaintext.len + oracle->secret.len + 16);
     // oracle appends the secret to user supplied plaintext
-    String pt_secret = String_with_cap(WC_LIBC, plaintext.len + oracle->secret.len);
-    String_append_multi(&pt_secret, plaintext.data, plaintext.len);
+    String pt_secret = StrView_to_String(WC_LIBC, plaintext);
     String_append_multi(&pt_secret, oracle->secret.data, oracle->secret.len);
 
     u64 n        = encrypt_aes_128_ecb(      //
@@ -76,20 +76,21 @@ bool is_oracle_ecb(HashMap* map, Oracle* oracle, u64 block_size)
 // we should also cache plaintext blocks to avoid redundent calls to oracle, also use interned string store
 static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* ptset, Oracle* oracle, StrView plaintext)
 {
+    u64 block_size = plaintext.len + 1;
     // appended plaintext storage
-    String crafted = String_with_cap(WC_LIBC, plaintext.len + 1);
-    String_append_multi(&crafted, plaintext.data, plaintext.len);
+    String crafted = String_with_cap(WC_LIBC, block_size);
+    String_append_multi(&crafted, plaintext.data, block_size - 1);
     String_append_char(&crafted, 'A'); // temp fil in to set size to block_size
     // cypher output storage
-    String cypher = String_with_cap(WC_LIBC, (plaintext.len + 1) * 2); // plaintext.len == block_size - 1
+    String cypher = String_with_cap(WC_LIBC, block_size * 2); // plaintext.len == block_size - 1
 
     // one byte will be appended to plaintext and we need to brute force all possible combinations of plaintext
     // then we store the cypherblock -> last char mapping for later decoding
 
-    // printable ascii range + control chars
+    // whole ascii range
     for (u8 i = 0; i < 128; i++) {
         // set the (block_size - 1)th char
-        String_set_char(&crafted, plaintext.len, (char)i);
+        String_set_char(&crafted, block_size - 1, (char)i);
         StrView pt = StringStore_str(ss, &crafted); // storage for ptset
         // if we have seen this plaintext block before, dont do anything
         if (HashMap_has(ptset, &pt)) {
@@ -99,8 +100,9 @@ static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* p
 
         fixed_key_oracle(StrView_over_String(&crafted), oracle, &cypher);
 
-        // BUG: 2. The dictionary key is the whole ciphertext, not one block
-        StrView ct = StringStore_str(ss, &cypher); // storage for ctmap
+        // BUG:
+        // oracle encryptes crafted || secret. but we only need the first block
+        StrView ct = StringStore_sv(ss, StrView_over_String_ex(&cypher, 0, block_size));
         if (!HashMap_has(ctmap, &ct)) {
             // cypher block -> last char of crafted block (variable)
             HashMap_put(ctmap, &ct, &i);
@@ -153,8 +155,6 @@ int challenge12_run(void)
     HashMap block_map =
         HashMap_create(WC_LIBC, sizeof(StrView), sizeof(char), wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
-
-    // TODO:
     /*
         the starting plaintext is A's, with len block_size - 1, so when oracle appends the secret, it's first
         byte aligns with our A block. we find all the possible cypher blocks for the final char, then supply the 
@@ -163,28 +163,38 @@ int challenge12_run(void)
     */
 
     // plaintext accumulator
-    String plaintext = String_with_cap(WC_LIBC, block_size - 1);
-    String_reserve_char(&plaintext, block_size - 1, 'A');
+    String ptpad = String_with_cap(WC_LIBC, block_size - 1);
+    String_reserve_char(&ptpad, block_size - 1, 'A');
     // oracle output storage
     String cypher = String_with_cap(WC_LIBC, block_size);
+    // final decoded secret storage
+    String plaintext = String_with_cap(WC_LIBC, block_size);
+    // plaintext set for caching blocks
+    HashMap ptset = HashMap_create(WC_LIBC, sizeof(StrView), sizeof(char), wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
     u64 off = 0; // window offset
-    // BUG: need to figure out offset wrapping and how to mis-align subsequent blocks by 1
-    // need to store the output seperately and and only need to send to the oracle a
-    // string with all A's (block_size - 1), then one less and so on
-    // when it reaches 0, reset to (block_size - 1) (offset % block_size wrapping)
 
-    while (true) { // TODO: condition: hashmap_get
-        StrView pt = StrView_over_String_ex(&plaintext, off, block_size - 1); // one less then block size
+    while (true) {
+        // out cypher input ranges from 15 A's to 1 A and again we wrap around to 15 A's
+        // 15 A's makes it so secret's first char is the last char of the block
+        // after we decode it, we want to make it so the second secret char is also in the first block,
+        // hence we decrease our input by one. when we have the whole first block decoded, we move the
+        // the next one, so we will need 15 A's again, so second block's last char is the next secret char
+        StrView pt = StrView_over_String_ex(&ptpad, 0,
+                                            block_size - 1 - (off % (block_size - 1))); // goes from 15...1...15...1 etc
 
-        // BUG:is_oracle_ecb(&set, …) fills set with views into As and cypher, which are destroyed before it returns. You then reuse set as ptset, so it holds dangling keys. Use a fresh map for ptset, or clear set after the ECB check
-        find_byte_cypher_mapping(&store, &block_map, &set, &oracle, pt);
-        fixed_key_oracle(StrView_over_String(&plaintext), &oracle, &cypher);
+        find_byte_cypher_mapping(&store, &block_map, &ptset, &oracle, pt);
+        // TODO: pt only has the pad, we need to add cypher decoded chars to it as well
+
+        fixed_key_oracle(StrView_over_String(&ptpad), &oracle, &cypher);
 
         StrView ct = StrView_over_String_ex(&cypher, off, block_size); // get the WHOLE block
         char    c;
         // get the char that mapped this cypher block
-        WC_ASSERT(HashMap_get(&block_map, &ct, &c), "cypher block was not present in cypher->char map");
+        if (!HashMap_get(&block_map, &ct, &c)) {
+            break; //
+        }
+
         // append that char to the plaintext
         String_append_char(&plaintext, c);
         off++; // slide window
@@ -193,9 +203,10 @@ int challenge12_run(void)
     String_print(&plaintext);
 
 
-
-    String_destroy(&cypher);
+    HashMap_destroy(&ptset);
     String_destroy(&plaintext);
+    String_destroy(&cypher);
+    String_destroy(&ptpad);
     HashMap_destroy(&block_map);
     StringStore_destroy(&store);
     HashMap_destroy(&set);
