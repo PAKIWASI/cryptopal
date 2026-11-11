@@ -7,7 +7,6 @@
 #include <string.h>
 
 
-
 void fixed_key_oracle(StrView plaintext, Oracle* oracle, String* cypher)
 {
     String_clear(cypher);
@@ -92,7 +91,6 @@ static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* p
 
         fixed_key_oracle(StrView_over_String(&crafted), oracle, &cypher);
 
-        // BUG:
         // oracle encryptes crafted || secret. but we only need the first block
         StrView ct = StringStore_sv(ss, StrView_over_String_ex(&cypher, 0, block_size));
         if (!HashMap_has(ctmap, &ct)) {
@@ -137,22 +135,22 @@ int challenge12_run(void)
     WC_ASSERT(is_oracle_ecb(&set, &oracle, block_size), "oracle no ecb");
 
     /*
-        AES ECB encrypts the whole `block_size` block as `block_size` cyphertext (as a whole, NOT individual chars)
-        the same plaintext produces the same cyphertext. so we will map crafted plaintext block [A...A], [A...B] etc
-        to their cypher under the random key. we will store cypher block -> char for all possible 1 byte values
-        we dont need to store the entire plaintext as a value we it's the crafted input, so we know the char that made that plaintext
-    */
+    AES ECB encrypts the whole `block_size` block as `block_size` cyphertext (as a whole, NOT individual chars)
+    the same plaintext produces the same cyphertext. so we will map crafted plaintext block [A...A], [A...B] etc
+    to their cypher under the random key. we will store cypher block -> char for all possible 1 byte values
+    we dont need to store the entire plaintext as a value we it's the crafted input, so we know the char that made that plaintext
+*/
     StringStore store;
     StringStore_create(&store, WC_LIBC, nKB(1), true); // interned
     HashMap block_map =
         HashMap_create(WC_LIBC, sizeof(StrView), sizeof(char), wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
     /*
-        the starting plaintext is A's, with len block_size - 1, so when oracle appends the secret, it's first
-        byte aligns with our A block. we find all the possible cypher blocks for the final char, then supply the 
-        oracle with plaintext (where block alignment will be with secret's first byte). we decode the char with the mapping
-        and append it to the plaintext. now we slide the window forward and repeat
-    */
+    the starting plaintext is A's, with len block_size - 1, so when oracle appends the secret, it's first
+    byte aligns with our A block. we find all the possible cypher blocks for the final char, then supply the 
+    oracle with plaintext (where block alignment will be with secret's first byte). we decode the char with the mapping
+    and append it to the plaintext and reduce the A padding from the start. now we slide the window forward and repeat.
+*/
 
     // known stores the decoded bytes of the secret
     // it starts off as padding of block_size - 1
@@ -175,12 +173,13 @@ int challenge12_run(void)
         StrView ct  = StrView_over_String_ex(&cypher, blk, block_size);
 
         /*
-            dictionary maps encrypt(P) to a byte, where P is exactly one 16-byte plaintext block.
-            For a lookup to hit, the slice you read from the target ciphertext has to be one whole encrypted block,
-            which means it must start at a multiple of 16.
+        dictionary maps encrypt(P) to a byte, where P is exactly one 16-byte plaintext block.
+        For a lookup to hit, the slice you read from the target ciphertext has to be one whole encrypted block,
+        which means it must start at a multiple of 16.
 
-            Which block you read: blk = (off / bs) * bs. This only moves forward every 16 decoded bytes.
-            Where the secret byte sits inside that block: this is controlled by the pad length, bs - 1 - (off % bs). It slides the secret left one byte at a time, so the byte you want is always the last byte of the block you read.
+        Which block you read: blk = (off / bs) * bs. This only moves forward every 16 decoded bytes.
+        Where the secret byte sits inside that block is controlled by the pad length, bs - 1 - (off % bs).
+        It slides the secret left one byte at a time, so the byte you want is always the last byte of the block you read.
         */
 
         // last block_size - 1 bytes and every candidate byte for the dictionary
