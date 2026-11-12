@@ -88,6 +88,7 @@ set(SRC_FILES
     src/set2/challenge10.c
     src/set2/challenge11.c
     src/set2/challenge12.c
+    src/set2/challenge13.c
 )
 
 add_executable(main
