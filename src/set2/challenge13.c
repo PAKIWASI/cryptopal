@@ -63,7 +63,7 @@ static inline bool is_local_special(char c)
     return (c == '_' || c == '%' || c == '+' || c == '-') != 0;
 }
 
-StrView validate_email(StrView email)
+static bool validate_email_strict(StrView email)
 {
     u64  at            = WC_NOT_FOUND;
     bool dot_in_domain = false;
@@ -77,19 +77,19 @@ StrView validate_email(StrView email)
         // domain part starts after this
         if (c == '@') {
             if (at != WC_NOT_FOUND || i == 0 || email.data[i - 1] == '.') {
-                return SV_NULL; // second @ or  // empty local part or "a.@b" etc
+                return false; // second @ or  // empty local part or "a.@b" etc
             }
             at = i;
             continue;
         }
         // dot can appear in both name and domain part
         if (c == '.') {
-            if (i == 0 || i + 1 == email.len) {
-                return SV_NULL; // leading/trailing dot
+            if (i == 0 || i == email.len - 1) {
+                return false; // leading/trailing dot
             }
             char prev = email.data[i - 1];
             if (prev == '.' || prev == '@') {
-                return SV_NULL; // "..", "@."
+                return false; // "..", "@."
             }
             // we already have an @: we are in the domain part
             if (at != WC_NOT_FOUND) {
@@ -103,14 +103,50 @@ StrView validate_email(StrView email)
             continue;
         }
 
-        return SV_NULL; // invalid char
+        return false; // invalid char
     }
 
     if (at == WC_NOT_FOUND || !dot_in_domain) {
+        return false;
+    }
+    return true;
+}
+
+StrView validate_email(StrView email)
+{
+    u64 start = WC_NOT_FOUND;
+    u64 end   = WC_NOT_FOUND;
+
+    // find the start
+    for (u64 i = 0; i < email.len; i++) {
+        char c = email.data[i];
+
+        if (is_alnum(c) || is_local_special(c)) { // these are valid chars for email start
+            start = i;
+            break;
+        }
+    }
+    if (start == WC_NOT_FOUND) {
         return SV_NULL;
     }
-    return email;
+
+    // find the end index
+    for (u64 i = email.len - 1; i >= start; i--) {
+        char c = email.data[i];
+
+        if (is_alnum(c)) { // only these accepted after @, at the end
+            end = i;
+            break;
+        }
+    }
+    if (end == WC_NOT_FOUND) {
+        return SV_NULL;
+    }
+
+    StrView sl = StrView_slice(email, start, end - start + 1);
+    return validate_email_strict(sl) ? sl : SV_NULL;
 }
+
 
 
 void profile_for(StrView email, String* out) {}
@@ -132,10 +168,10 @@ int challenge13_run(void)
 
     // TODO: handle preceding and trailing spaces or other invalid chars: we just return the view of the valid
     // email, if it's valid
-    const char* email = "wasi@gmail.com&";
+    const char* email = "* =wasi@gmail.com   &";
     StrView     v     = validate_email(StrView_over_cstr(email));
-    StrView_print(v);
     WC_ASSERT(StrView_is_valid(v), );
+    StrView_print(v);
 
     HashMap_destroy(&pairs);
     StringStore_destroy(&store);
