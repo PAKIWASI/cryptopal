@@ -179,6 +179,7 @@ StrView validate_email(StrView email);
 
 void profile_for(StrView email, String* out);
 
+void encrypt_string_key(StrView str, StrView key, String* cypher);
+
+
 int challenge13_run(void);
-
-

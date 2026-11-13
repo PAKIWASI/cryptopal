@@ -149,7 +149,21 @@ StrView validate_email(StrView email)
 
 
 
-void profile_for(StrView email, String* out) {}
+void profile_for(StrView email, String* out)
+{
+    StrView valid_mail = validate_email(email);
+
+    static u16 uid = 0;
+    char       printable[8];
+    snprintf(printable, 8, "%hu", uid);
+    uid++;
+
+    String_append_cstr(out, "email=");
+    String_append_multi(out, valid_mail.data, valid_mail.len);
+    String_append_cstr(out, "&uid=");
+    String_append_cstr(out, printable);
+    String_append_cstr(out, "&role=user");
+}
 
 
 int challenge13_run(void)
@@ -162,17 +176,25 @@ int challenge13_run(void)
     HashMap pairs =
         HashMap_create(WC_LIBC, sizeof(StrView), sizeof(StrView), wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
-    parse_kv(StrView_over_cstr(kvs), &store, &pairs);
 
+    parse_kv(StrView_over_cstr(kvs), &store, &pairs);
     HashMap_print(&pairs, wc_strview_print, wc_strview_print);
 
-    // TODO: handle preceding and trailing spaces or other invalid chars: we just return the view of the valid
-    // email, if it's valid
-    const char* email = "* =wasi@gmail.com   &";
-    StrView     v     = validate_email(StrView_over_cstr(email));
-    WC_ASSERT(StrView_is_valid(v), );
-    StrView_print(v);
 
+    const char* email   = "* =wasi@gmail.com   &";
+    String      profile = String_create(WC_LIBC);
+    profile_for(StrView_over_cstr(email), &profile);
+    String_print(&profile);
+    putchar('\n');
+
+    u8 rand_key[16];
+    generate_random_aes_128_key(rand_key);
+
+
+
+
+
+    String_destroy(&profile);
     HashMap_destroy(&pairs);
     StringStore_destroy(&store);
     return 0;
