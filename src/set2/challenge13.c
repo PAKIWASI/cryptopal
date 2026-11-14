@@ -1,6 +1,8 @@
 #include "random_single.h"
+#include "set1.h"
 #include "set2.h"
 #include "views_single.h"
+
 #include <stdio.h>
 
 
@@ -63,7 +65,7 @@ static inline bool is_local_special(char c)
     return (c == '_' || c == '%' || c == '+' || c == '-') != 0;
 }
 
-static bool validate_email_strict(StrView email)
+bool validate_email(StrView email)
 {
     u64  at            = WC_NOT_FOUND;
     bool dot_in_domain = false;
@@ -112,7 +114,7 @@ static bool validate_email_strict(StrView email)
     return true;
 }
 
-StrView validate_email(StrView email)
+StrView extract_email(StrView email)
 {
     u64 start = WC_NOT_FOUND;
     u64 end   = WC_NOT_FOUND;
@@ -144,16 +146,16 @@ StrView validate_email(StrView email)
     }
 
     StrView sl = StrView_slice(email, start, end - start + 1);
-    return validate_email_strict(sl) ? sl : SV_NULL;
+    return validate_email(sl) ? sl : SV_NULL;
 }
 
 
 
 void profile_for(StrView email, String* out)
 {
-    StrView valid_mail = validate_email(email);
+    StrView valid_mail = extract_email(email);
 
-    static u16 uid = 0;
+    static u16 uid = 100;
     char       printable[8];
     snprintf(printable, 8, "%hu", uid);
     uid++;
@@ -165,36 +167,86 @@ void profile_for(StrView email, String* out)
     String_append_cstr(out, "&role=user");
 }
 
+void encrypt_aes_ecb_string(StrView str, StrView key, String* cypher)
+{
+    String_clear(cypher);
+    String_reserve(cypher, str.len + 16);
+    u64 n        = encrypt_aes_128_ecb(str, key, (u8*)String_data_ptr_unsafe(cypher), String_capacity(cypher), true);
+    cypher->size = n;
+}
+
+void decrypt_aes_ecb_string(StrView str, StrView key, String* plaintext)
+{
+    String_clear(plaintext);
+    String_reserve(plaintext, str.len + 16);
+    u64 n = decrypt_aes_128_ecb(str, key, (u8*)String_data_ptr_unsafe(plaintext), String_capacity(plaintext), true);
+    plaintext->size = n;
+}
 
 int challenge13_run(void)
 {
-    const char* kvs = "foo=bar&baz=qux&zap=zazzle&hello=";
-
     StringStore store;
     StringStore_create(&store, WC_LIBC, nKB(1), false);
 
+    // map for storing parsed key value pairs from the profiles
     HashMap pairs =
         HashMap_create(WC_LIBC, sizeof(StrView), sizeof(StrView), wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
+    u8 rand_key[16];
+    generate_random_aes_128_key(rand_key);
+    StrView rkey = StrView_over_buf((char*)rand_key, 16);
 
-    parse_kv(StrView_over_cstr(kvs), &store, &pairs);
+    /*
+        craft email A to isolate the role= field
+        Push the substring role= to the end of a block. This ensures the next block starts with the role value
+        Feed the oracle emails of varying lengths (e.g., "A"*n). For each, check the ciphertext length.
+        The moment the ciphertext length increases by one block (16 bytes), you have filled a block completely.
+        Adjust the email length by a few more characters (e.g., +3 or +4) to push "user" into its own, new block.
+    */
+    const char* email     = "AAAAAAAAAwasisatti@gmail.com";
+    String      profile_A = String_create(WC_LIBC);
+    String      cypher_A  = String_create(WC_LIBC);
+    profile_for(StrView_over_cstr(email), &profile_A);
+    String_print(&profile_A); putchar('\n');
+    // find index of role=user
+    u64 user_i = StrView_find(StrView_over_String(&profile_A), StrView_over_cstr("role=user"));
+    WC_ASSERT(user_i != WC_NOT_FOUND, );
+    user_i += 5;                                                          // +5 to skip role=
+    WC_ASSERT(user_i % 16 == 0, "must be a mulitple of 16: %lu", user_i); // it must be a multiple of 16
+    encrypt_aes_ecb_string(StrView_over_String(&profile_A), rkey, &cypher_A);
+    WC_ASSERT(cypher_A.size == user_i + 16, );
+    // the final block has "user" and some padding encrypted
+
+
+    /*
+        craft email B to isolate the admin string. Since the total length of "admin" is 5 bytes,
+        it will be padded with 11 bytes of PKCS#7 padding. this block has only admin plus padding
+    */
+    String profile_B = String_from_cstr(WC_LIBC, "admin");
+    String cypher_B  = String_create(WC_LIBC);
+    encrypt_aes_ecb_string(StrView_over_String(&profile_B), rkey, &cypher_B);
+    WC_ASSERT(cypher_B.size == 16, );
+
+    
+    // remove the last block from A (containing user + padding) and replace it with B (containing admin + padding)
+    String_remove_range(&cypher_A, String_len(&cypher_A) - 16 - 1, 16);
+    String_append_String(&cypher_A, &cypher_B);
+
+    // decrypt
+    String pt = String_create(WC_LIBC);
+    decrypt_aes_ecb_string(StrView_over_String(&cypher_A), rkey, &pt);
+
+    // parse the key value pairs
+    parse_kv(StrView_over_String(&pt), &store, &pairs);
+
     HashMap_print(&pairs, wc_strview_print, wc_strview_print);
 
 
-    const char* email   = "* =wasi@gmail.com   &";
-    String      profile = String_create(WC_LIBC);
-    profile_for(StrView_over_cstr(email), &profile);
-    String_print(&profile);
-    putchar('\n');
-
-    u8 rand_key[16];
-    generate_random_aes_128_key(rand_key);
-
-
-
-
-
-    String_destroy(&profile);
+    String_destroy(&pt);
+    String_destroy(&cypher_B);
+    String_destroy(&profile_B);
+    String_destroy(&cypher_A);
+    String_destroy(&profile_A);
     HashMap_destroy(&pairs);
     StringStore_destroy(&store);
     return 0;

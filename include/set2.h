@@ -168,18 +168,25 @@ Now, two more easy functions. Generate a random AES key, then:
     Encrypt the encoded user profile under the key; "provide" that to the "attacker".
     Decrypt the encoded user profile and parse it.
 
-Using only the user input to profile_for() (as an oracle to generate "valid" ciphertexts) and the ciphertexts themselves, make a role=admin profile. 
+Using only the user input to profile_for() (as an oracle to generate "valid" ciphertexts) and the ciphertexts themselves, make a role=admin profile.
+
+The Exploit (ECB Mode): AES in ECB mode encrypts each 16-byte block independently and deterministically. This means an identical plaintext block will always produce an identical ciphertext block. You can therefore "cut" ciphertext blocks from one valid profile and "paste" them into another to rearrange the decrypted plaintext
+I guess they want me to encrypt &role=admin and inject it into a normal profile which has role=user and replace it. when we decrypt and parse it it will say that user is admin
+
 */
 
 // out has str -> str (the parsed key vals). They are stored in ss;
 void parse_kv(StrView kvs, StringStore* ss, HashMap* out);
 
-// validates the email and returns a view into the valid email, SV_NULL if email invalid
-StrView validate_email(StrView email);
+// return true if email is valid
+bool validate_email(StrView email);
+// returns a view into the valid email, SV_NULL if no email found or is invalid
+StrView extract_email(StrView email);
 
 void profile_for(StrView email, String* out);
 
-void encrypt_string_key(StrView str, StrView key, String* cypher);
+void encrypt_aes_ecb_string(StrView str, StrView key, String* cypher);
+void decrypt_aes_ecb_string(StrView str, StrView key, String* plaintext);
 
 
 int challenge13_run(void);
