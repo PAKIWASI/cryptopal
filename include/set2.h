@@ -183,6 +183,7 @@ bool validate_email(StrView email);
 // returns a view into the valid email, SV_NULL if no email found or is invalid
 StrView extract_email(StrView email);
 
+void profile_for_strict(StrView email, String* out);
 void profile_for(StrView email, String* out);
 
 void encrypt_aes_ecb_string(StrView str, StrView key, String* cypher);
