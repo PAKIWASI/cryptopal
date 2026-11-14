@@ -207,7 +207,8 @@ int challenge13_run(void)
     String      profile_A = String_create(WC_LIBC);
     String      cypher_A  = String_create(WC_LIBC);
     profile_for(StrView_over_cstr(email), &profile_A);
-    String_print(&profile_A); putchar('\n');
+    String_print(&profile_A);
+    putchar('\n');
     // find index of role=user
     u64 user_i = StrView_find(StrView_over_String(&profile_A), StrView_over_cstr("role=user"));
     WC_ASSERT(user_i != WC_NOT_FOUND, );
@@ -216,7 +217,6 @@ int challenge13_run(void)
     encrypt_aes_ecb_string(StrView_over_String(&profile_A), rkey, &cypher_A);
     WC_ASSERT(cypher_A.size == user_i + 16, );
     // the final block has "user" and some padding encrypted
-
 
     /*
         craft email B to isolate the admin string. Since the total length of "admin" is 5 bytes,
@@ -227,9 +227,8 @@ int challenge13_run(void)
     encrypt_aes_ecb_string(StrView_over_String(&profile_B), rkey, &cypher_B);
     WC_ASSERT(cypher_B.size == 16, );
 
-    
     // remove the last block from A (containing user + padding) and replace it with B (containing admin + padding)
-    String_remove_range(&cypher_A, String_len(&cypher_A) - 16 - 1, 16);
+    String_remove_range(&cypher_A, String_len(&cypher_A) - 16, 16);
     String_append_String(&cypher_A, &cypher_B);
 
     // decrypt
@@ -240,7 +239,6 @@ int challenge13_run(void)
     parse_kv(StrView_over_String(&pt), &store, &pairs);
 
     HashMap_print(&pairs, wc_strview_print, wc_strview_print);
-
 
     String_destroy(&pt);
     String_destroy(&cypher_B);
