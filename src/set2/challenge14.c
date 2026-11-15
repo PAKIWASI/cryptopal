@@ -8,6 +8,28 @@
 
 
 
+void fixed_key_oracle_2(StrView plaintext, Oracle_2* oracle, String* cypher)
+{
+    String_clear(cypher);
+    String_reserve(cypher, oracle->prepend.len + plaintext.len + oracle->secret.len + 16);
+
+    // random prepend
+    String temp = StrView_to_String(WC_LIBC, oracle->prepend);
+    // user controlled text
+    String_append_multi(&temp, plaintext.data, plaintext.len);
+    // secret message
+    String_append_multi(&temp, oracle->secret.data, oracle->secret.len);
+
+    u64 n        = encrypt_aes_128_ecb(      //
+        StrView_over_String(&temp),          //
+        oracle->key,                         //
+        (u8*)String_data_ptr_unsafe(cypher), //
+        String_capacity(cypher), true        //
+    );
+    cypher->size = n;
+
+    String_destroy(&temp);
+}
 
 
 int challenge14_run(void)
@@ -27,10 +49,7 @@ int challenge14_run(void)
     }
 
     // user input
-    String input = String_create(WC_LIBC);
-
-    // prepend
-    String_insert_multi(&input, 0, rand_bytes, rand_count);
+    String input = String_from_cstr(WC_LIBC, "AAAAAAAAAAAAAAAAAAAAAAAA");
 
     // the secret we wanna find out (base64)
     const char* secret_b64 =
@@ -40,25 +59,25 @@ int challenge14_run(void)
     String secret = String_with_cap(WC_LIBC, strlen(secret_b64));
     base64_decode(StrView_over_cstr(secret_b64), &secret);
 
-    Oracle oracle = {
-        .key    = StrView_over_buf((char*)rand_key, 16),
-        .secret = StrView_over_String(&secret),
+    Oracle_2 oracle = {
+        .prepend = StrView_over_buf(rand_bytes, rand_count),
+        .key     = StrView_over_buf((char*)rand_key, 16),
+        .secret  = StrView_over_String(&secret),
     };
 
     String cypher = String_create(WC_LIBC);
-
-    // oracle (only thing we use to decypher)
-    fixed_key_oracle(StrView_over_String(&input), &oracle, &cypher);
 
     /*
         adding random-looking junk in front of the data doesn’t protect ECB.
         The weakness is still that ECB encrypts identical blocks identically, and that we control part of the input
 
         how much can our input be mangeled? 1-15 bytes rand chars + remaining input for a block
-
     */
 
+    // oracle (only thing we use to decypher)
+    fixed_key_oracle_2(StrView_over_String(&input), &oracle, &cypher);
 
+    print_hex(String_data_ptr(&cypher), cypher.size, 16);
 
 
     String_destroy(&cypher);

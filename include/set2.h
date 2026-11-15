@@ -210,8 +210,13 @@ no crazy math is required.
 Think "STIMULUS" and "RESPONSE".
 */
 
+typedef struct {
+    StrView prepend; // the prepended random bytes
+    StrView key;     // the random key
+    StrView secret;  // the secret the oracle will append
+} Oracle_2;
+
+
+void fixed_key_oracle_2(StrView plaintext, Oracle_2* oracle, String* cypher);
+
 int challenge14_run(void);
-
-
-
-
