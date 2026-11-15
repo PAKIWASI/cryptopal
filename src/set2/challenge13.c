@@ -133,11 +133,9 @@ StrView extract_email(StrView email)
     }
 
     // find the end index
-    for (u64 i = email.len - 1; i >= start; i--) {
-        char c = email.data[i];
-
-        if (is_alnum(c)) { // only these accepted after @, at the end
-            end = i;
+    for (u64 i = email.len; i > start; i--) {
+        if (is_alnum(email.data[i - 1])) {
+            end = i - 1;
             break;
         }
     }
@@ -236,7 +234,7 @@ int challenge13_run(void)
         The moment the ciphertext length increases by one block (16 bytes), you have filled a block completely.
         Adjust the email length by a few more characters (e.g., +3 or +4) to push "user" into its own, new block.
     */
-    const char* email_A   = "AAAAAAAAAwasisatti@gmail.com";
+    const char* email_A   = "AAAAAAAAAAwasisatti@gmail.com";
     String      profile_A = String_create(WC_LIBC);
     profile_for(StrView_over_cstr(email_A), &profile_A);
     String_print(&profile_A);
