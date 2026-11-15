@@ -189,5 +189,29 @@ void profile_for(StrView email, String* out);
 void encrypt_aes_ecb_string(StrView str, StrView key, String* cypher);
 void decrypt_aes_ecb_string(StrView str, StrView key, String* plaintext);
 
-
 int challenge13_run(void);
+
+
+
+// challenge 14
+/*
+Byte-at-a-time ECB decryption (Harder)
+
+Take your oracle function from #12. Now generate a random count of random bytes and prepend this string to every plaintext. You are now doing:
+
+AES-128-ECB(random-prefix || attacker-controlled || target-bytes, random-key)
+
+Same goal: decrypt the target-bytes.
+Stop and think for a second.
+
+What's harder than challenge #12 about doing this? How would you overcome that obstacle? The hint is: you're using all the tools you already have
+no crazy math is required.
+
+Think "STIMULUS" and "RESPONSE".
+*/
+
+int challenge14_run(void);
+
+
+
+
