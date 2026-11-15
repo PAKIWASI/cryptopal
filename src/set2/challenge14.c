@@ -8,21 +8,23 @@
 
 
 
+
+
 int challenge14_run(void)
 {
     WC_Pcg32 rng = PCG32_INITIALIZER;
     pcg32_rand_seed_os(&rng);
 
-    // random bytes to prepend to the user input
+    // random key
+    u8 rand_key[16];
+    generate_random_aes_128_key(rand_key);
+
+    // random bytes to prepend to the user input (count can't be used for decryption, only oracle)
     u32   rand_count = pcg32_rand_range(&rng, 1, 160);
     char* rand_bytes = wc_alloc(WC_LIBC, rand_count, alignof(char));
     for (u32 i = 0; i < rand_count; i++) {
         rand_bytes[i] = (char)pcg32_rand(&rng);
     }
-
-    // random key
-    u8 rand_key[16];
-    generate_random_aes_128_key(rand_key);
 
     // user input
     String input = String_create(WC_LIBC);
@@ -45,8 +47,18 @@ int challenge14_run(void)
 
     String cypher = String_create(WC_LIBC);
 
-    // oracle
+    // oracle (only thing we use to decypher)
     fixed_key_oracle(StrView_over_String(&input), &oracle, &cypher);
+
+    /*
+        adding random-looking junk in front of the data doesn’t protect ECB.
+        The weakness is still that ECB encrypts identical blocks identically, and that we control part of the input
+
+        how much can our input be mangeled? 1-15 bytes rand chars + remaining input for a block
+
+    */
+
+
 
 
     String_destroy(&cypher);
