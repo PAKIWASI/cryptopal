@@ -4,6 +4,7 @@
 #include "views_single.h"
 
 #include <stdalign.h>
+#include <stddef.h>
 #include <string.h>
 
 
@@ -31,6 +32,23 @@ void fixed_key_oracle_2(StrView plaintext, Oracle_2* oracle, String* cypher)
     String_destroy(&temp);
 }
 
+static u64 find_padding(Oracle_2* oracle)
+{
+    String input = String_create(WC_LIBC);
+    String_reserve_char(&input, (u64)(4 * 16), 'A'); // forth block is supplied 0-15
+
+    String cypher = String_with_cap(WC_LIBC, input.size);
+
+    for (u64 i = 0; i < 16; i++) {
+        fixed_key_oracle_2(StrView_over_String_ex(&input, 0, (u64)(3 * 16) + i), oracle, &cypher);
+        // if we find 3 blocks of encrypted A's, then we have the padding
+        is_oracle_ecb(HashMap *map, Oracle *oracle, u64 block_size);
+    }
+
+    String_destroy(&input);
+    String_destroy(&input);
+}
+
 
 int challenge14_run(void)
 {
@@ -49,7 +67,7 @@ int challenge14_run(void)
     }
 
     // user input
-    String input = String_from_cstr(WC_LIBC, "AAAAAAAAAAAAAAAAAAAAAAAA");
+    String input = String_create(WC_LIBC);
 
     // the secret we wanna find out (base64)
     const char* secret_b64 =
@@ -72,12 +90,17 @@ int challenge14_run(void)
         The weakness is still that ECB encrypts identical blocks identically, and that we control part of the input
 
         how much can our input be mangeled? 1-15 bytes rand chars + remaining input for a block
+        16 random bytes - 0 + 16 x 3 input A's
+        15 random bytes - 1 + 16 x 3 input A's
+        14 random bytes - 2 + 16 x 3 input A's
+        13 random bytes - 3 + 16 x 3 input A's
+        ...
+        1 random bytes - 15 + 16 x 3 input A's
+
+        we supply all the possible inputs of A's and see when we get consecutive 3 blocks of cyphertext that's the same
+        that means that's the number of A's we need to complete the block. then, using the last block of A's from the input,
+        we can do the normal supply one less so secret's first byte is the blocks last byte etc etc
     */
-
-    // oracle (only thing we use to decypher)
-    fixed_key_oracle_2(StrView_over_String(&input), &oracle, &cypher);
-
-    print_hex(String_data_ptr(&cypher), cypher.size, 16);
 
 
     String_destroy(&cypher);
