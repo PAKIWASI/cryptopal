@@ -34,7 +34,7 @@ void fixed_key_oracle_2(StrView plaintext, Oracle_2* oracle, String* cypher)
     String_destroy(&temp);
 }
 
-static bool has_3_repeated_blks(StrView cypher)
+static u64 has_3_repeated_blks(StrView cypher)
 {
     HashMap sv_count =
         HashMap_create(WC_LIBC, sizeof(StrView), sizeof(u64), wc_strview_hash, wc_strview_cmp, NULL, NULL);
@@ -45,7 +45,7 @@ static bool has_3_repeated_blks(StrView cypher)
             u64* count = (u64*)HashMap_get_ptr(&sv_count, &blk);
             if (++(*count) >= 3) {
                 HashMap_destroy(&sv_count);
-                return true;
+                return i - ((u64)(2 * 16)); // returns when the 3rd repeated block is found, move back 2
             }
         } else {
             u64 count = 1;
@@ -54,10 +54,15 @@ static bool has_3_repeated_blks(StrView cypher)
     }
 
     HashMap_destroy(&sv_count);
-    return false;
+    return WC_NOT_FOUND;
 }
 
-static u64 find_padding(Oracle_2* oracle)
+typedef struct {
+    u64 pad;
+    u64 base;
+} pad_base;
+
+static pad_base find_padding(Oracle_2* oracle)
 {
     String input = String_create(WC_LIBC);
     String_reserve_char(&input, (u64)(4 * 16), 'A'); // forth block is supplied 0-15
@@ -67,16 +72,17 @@ static u64 find_padding(Oracle_2* oracle)
     for (u64 i = 0; i < 16; i++) {
         fixed_key_oracle_2(StrView_over_String_ex(&input, 0, (u64)(3 * 16) + i), oracle, &cypher);
         // if we find 3 blocks of encrypted A's, then we have the padding
-        if (has_3_repeated_blks(StrView_over_String(&cypher))) {
+        u64 blk = has_3_repeated_blks(StrView_over_String(&cypher));
+        if (blk != WC_NOT_FOUND) {
             String_destroy(&cypher);
             String_destroy(&input);
-            return i;
+            return (pad_base){.pad = i, .base = blk};
         }
     }
 
     String_destroy(&cypher);
     String_destroy(&input);
-    return WC_NOT_FOUND;
+    return (pad_base){0};
 }
 
 
@@ -134,12 +140,14 @@ int challenge14_run(void)
         we can do the normal supply one less so secret's first byte is the blocks last byte etc etc
     */
 
-    u64 pad = find_padding(&oracle_2);
-    WC_ASSERT(pad != WC_NOT_FOUND, );
-    printf("PADDING: %lu\n", pad);
+    pad_base pb = find_padding(&oracle_2);
+    WC_ASSERT(pb.pad != WC_NOT_FOUND, );
+    printf("PADDING: %lu\n", pb.pad);
+
 
 
     // now the normal byte at a time decryption from challenge 12
+
     u64 block_size = 16;
 
     StringStore store;
@@ -149,23 +157,29 @@ int challenge14_run(void)
 
     // contains the bytes as we decypher them. starts of with pad (to align the user input) and one less than block size
     String known = String_with_cap(WC_LIBC, 256);
-    String_reserve_char(&known, pad + block_size - 1, 'A');
+    String_reserve_char(&known, pb.pad + block_size - 1, 'A');
     // oracle output storage
     String cypher = String_with_cap(WC_LIBC, block_size);
     // plaintext set for caching blocks
     HashMap ptset = HashMap_create(WC_LIBC, sizeof(StrView), 0, wc_strview_hash, wc_strview_cmp, NULL, NULL);
 
 
-    // we offset by pad as it's just to align the next block for byte at a time decryption
-    for (u64 off = pad;; off++) {
+    // off is the index of the secret byte we are recovering. goes from 0 to secret's length (which is unknown)
+    for (u64 off = 0;; off++) {
         // pad only view for the oracle to align blocks
-        u64     pad_len = block_size - 1 - (off % block_size);        // 15...0 to 15...0 and so on
-        StrView p       = StrView_over_String_ex(&known, 0, pad_len); // include the pad for random
+        u64     pad_len = block_size - 1 - (off % block_size); // 15...0 to 15...0 and so on
+        StrView p = StrView_over_String_ex(&known, 0,
+                                           pad_len + pb.pad); // we include pad for when we want to send input to oracle
 
         fixed_key_oracle_2(p, &oracle_2, &cypher);
 
         // off has to be rounded down to a multiple of the block size
-        u64     blk = (off / block_size) * block_size;
+        // TODO: base, the number of bytes the prefix (random bytes + our alignment) plus filler occupies. Add it to every ciphertext slice,
+        // otherwise you’re comparing against the prefix’s blocks instead of the secret’s.
+        // base = prefix_blocks * 16
+        // the find_padding function return the index to the base block
+
+        u64     blk = pb.base + ((off / block_size) * block_size); // also offset by pad first
         StrView ct  = StrView_over_String_ex(&cypher, blk, block_size);
 
         /*
@@ -178,7 +192,7 @@ int challenge14_run(void)
         It slides the secret left one byte at a time, so the byte you want is always the last byte of the block you read.
         */
 
-        // last block_size - 1 bytes and every candidate byte for the dictionary
+        // secret byte k sits at the last byte of this block
         StrView prefix = StrView_over_String_ex(&known, known.size - (block_size - 1), block_size - 1);
 
         find_byte_cypher_mapping(&store, &block_map, &ptset, &oracle, prefix);
@@ -189,6 +203,7 @@ int challenge14_run(void)
         }
         String_append_char(&known, c);
     }
+
 
     String_print(&known);
 
