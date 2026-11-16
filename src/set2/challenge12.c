@@ -66,7 +66,7 @@ bool is_oracle_ecb(HashMap* map, Oracle* oracle, u64 block_size)
 }
 
 // we should also cache plaintext blocks to avoid redundent calls to oracle, also use interned string store
-static void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* ptset, Oracle* oracle, StrView plaintext)
+void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* ptset, Oracle* oracle, StrView plaintext)
 {
     u64 block_size = plaintext.len + 1;
     // appended plaintext storage

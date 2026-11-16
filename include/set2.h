@@ -123,6 +123,7 @@ typedef struct {
 void fixed_key_oracle(StrView plaintext, Oracle* oracle, String* cypher);
 u64  find_oracle_block_size(Oracle* oracle);
 bool is_oracle_ecb(HashMap* map, Oracle* oracle, u64 block_size);
+void find_byte_cypher_mapping(StringStore* ss, HashMap* ctmap, HashMap* ptset, Oracle* oracle, StrView plaintext);
 
 int challenge12_run(void);
 
