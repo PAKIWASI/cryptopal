@@ -221,3 +221,14 @@ typedef struct {
 void fixed_key_oracle_2(StrView plaintext, Oracle_2* oracle, String* cypher);
 
 int challenge14_run(void);
+
+
+// challenge 15
+/*
+
+*/
+
+int challenge15_run(void);
+
+
+
