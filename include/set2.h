@@ -292,10 +292,11 @@ Stop and think for a second.
 Before you implement this attack, answer this question: why does CBC mode have this property?
 */
 
-void first_function(StrView input, StrView key, String* cypher);
+void first_function(StrView input, StrView key, StrView iv, String* cypher);
+
+bool second_function(StrView cypher, StrView key, StrView iv, String* plaintext);
 
 int challenge16_run(void);
-
 
 
 

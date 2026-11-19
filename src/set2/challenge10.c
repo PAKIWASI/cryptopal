@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 static inline void handleErrors(void)
 {
     ERR_print_errors_fp(stderr);
@@ -176,7 +177,7 @@ void decrypt_aes_128_cbc(StrView cypher, StrView key, StrView iv, String* plaint
         // write the cypher block into reg, it will be xored with the next block's decryption output
         memcpy(reg, cypher.data + i, 16);
     }
-    // there should be any left
+    // there shouldn't be any left
 }
 
 
