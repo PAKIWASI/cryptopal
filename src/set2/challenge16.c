@@ -2,6 +2,7 @@
 #include "set2.h"
 #include "views_single.h"
 
+#include <stdio.h>
 #include <string.h>
 
 
@@ -53,27 +54,41 @@ int challenge16_run(void)
     u8      ivec[16] = {0};
     StrView iv       = StrView_over_buf((char*)ivec, 16);
     // user controlled input
-    const char* user_input = "hello;admin=true;";
+    const char* user_input_1 = ";admin=true;AAA";
 
     String cypher = String_create(WC_LIBC);
-    first_function(StrView_over_cstr(user_input), rkey, iv, &cypher);
+    first_function(StrView_over_cstr(user_input_1), rkey, iv, &cypher);
+    print_hex(cypher.heap, cypher.size, 16);
+
 
     // modify cyphertext to place admin=true
     /*
-        Let's say I modify the first byte of the cypher. In the decrypt function, Reg is loaded with IV and
-        we get garbage output for the first block decypher as internally it uses ecb and ecb encrypts identical
-        plaintext block to identical cyphertext block. I changed one byte so it'll be different.
-        Then that CYPHERTEXT block is loaded into the register where IV was for block one. That block is ONE BYTE off.
-        The first byte. So the second block is also all wrong again and we load the next
+        the decypher is:
+            Pi = D_k(Ci) ^ Ci-1
+        The ith plaintext block depends on the xor of the decyphered of ith cypherblock and the i-1th cypherblock
+        We modify the i-1th cypherblock such that the xor with the decypher output gives desired modifications in the ith plaintext
+        This completely scrambles the i-1th plaintext block (not important tho, we can pad using user input)
+        When someone actually decypheres the altered cypher without any integrity checks, they take the decypher at face value,
+        even though we modified it.
+    */
+    /*
+        the 3rd block has our user input. we can flip bits by modifying the bits of 2nd cypherblock
+        the bit flip scrambles 2nd plaintext but produces the same bit flip in the 3rd block
+        say 2nd block's first byte is 0 and we want to edit it so 3rd block's plaintext goes from ' ' to ';'
+        ' ' is ascii 32 and ';' is 59
+        ' ' ^ x = ';' -> 32 ^ x = 59 -> 32 ^x ^x = 59 ^x -> 32 ^ 59 = x = 27
     */
 
-    String pt = String_create(WC_LIBC);
-    WC_ASSERT(second_function(StrView_over_String(&cypher), rkey, iv, &pt), "didn't find admin=true");
+    cypher.heap[16] = 27; // first byte of 2nd block
+
+    String pt    = String_create(WC_LIBC);
+    bool   found = second_function(StrView_over_String(&cypher), rkey, iv, &pt);
+    String_print(&pt);
+    WC_ASSERT(found, "didn't find admin=true");
+
+
 
     String_destroy(&pt);
     String_destroy(&cypher);
     return 0;
 }
-
-
-
