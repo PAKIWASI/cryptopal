@@ -54,38 +54,97 @@ int challenge16_run(void)
     u8      ivec[16] = {0};
     StrView iv       = StrView_over_buf((char*)ivec, 16);
     // user controlled input
-    const char* user_input_1 = ";admin=true;AAA";
+    const char* user_input_1 = ";admin=true;AAAA";
 
     String cypher = String_create(WC_LIBC);
     first_function(StrView_over_cstr(user_input_1), rkey, iv, &cypher);
     print_hex(cypher.heap, cypher.size, 16);
 
-
     // modify cyphertext to place admin=true
     /*
-        the decypher is:
-            Pi = D_k(Ci) ^ Ci-1
-        The ith plaintext block depends on the xor of the decyphered of ith cypherblock and the i-1th cypherblock
-        We modify the i-1th cypherblock such that the xor with the decypher output gives desired modifications in the ith plaintext
-        This completely scrambles the i-1th plaintext block (not important tho, we can pad using user input)
-        When someone actually decypheres the altered cypher without any integrity checks, they take the decypher at face value,
-        even though we modified it.
-    */
-    /*
-        the 3rd block has our user input. we can flip bits by modifying the bits of 2nd cypherblock
-        the bit flip scrambles 2nd plaintext but produces the same bit flip in the 3rd block
-        say 2nd block's first byte is 0 and we want to edit it so 3rd block's plaintext goes from ' ' to ';'
-        ' ' is ascii 32 and ';' is 59
-        ' ' ^ x = ';' -> 32 ^ x = 59 -> 32 ^x ^x = 59 ^x -> 32 ^ 59 = x = 27
-    */
+     * AES-CBC decryption, block by block, is:
+     *
+     *     P[i] = D_K(C[i]) ^ C[i-1]
+     *
+     * where D_K is AES decryption, C[i] is the i-th ciphertext block,
+     * C[i-1] is the previous ciphertext block, and ^ is XOR.
+     * (For i = 0, C[-1] is the IV.)
+     *
+     * The attacker controls every byte of the ciphertext, so the attacker
+     * controls C[i-1] directly. The attacker does NOT know D_K(C[i]);
+     * that is a pseudorandom byte produced by AES.
+     *
+     * If we replace C[i-1] with (C[i-1] ^ delta), then:
+     *
+     *     P'[i] = D_K(C[i]) ^ (C[i-1] ^ delta)
+     *           = (D_K(C[i]) ^ C[i-1]) ^ delta
+     *           = P[i] ^ delta
+     *
+     * The unknown D_K(C[i]) cancels out against the existing C[i-1], and
+     * the plaintext byte changes by exactly delta, regardless of what
+     * the original ciphertext byte or the decrypted byte were. This is
+     * why the flip MUST be applied with ^= (XOR), not with = (assign):
+     *
+     *     C[i-1] ^= delta;   // correct:  P'[i] = P[i] ^ delta
+     *     C[i-1]  = delta;   // wrong:    P'[i] = D_K(C[i]) ^ delta
+     *
+     * The assignment version only lands on the desired plaintext byte if
+     * the decrypted byte D_K(C[i]) happens to equal the old plaintext
+     * byte (i.e. if the original C[i-1] was 0). That is a 1/256 event
+     * per flipped byte, so assignment is effectively broken.
+     *
+     * Layout produced by first_function():
+     *
+     *     "comment1=cooking%20MCs;userdata="  (32 bytes, 2 blocks: 0, 1)
+     *     "<user input>"                      (block 2)
+     *     ";comment2=%20like%20a%20pound%20of%20bacon"
+     *
+     * The prefix is exactly 32 bytes, so the user input begins on a
+     * block boundary at plaintext block 2. Therefore:
+     *
+     *   - plaintext block 1 depends on ciphertext block 0 (unchanged)
+     *   - plaintext block 2 depends on ciphertext block 1 (we flip this)
+     *   - flipping a byte in ciphertext block 1 also scrambles
+     *     plaintext block 1 (garbage, but harmless: it is the fixed
+     *     prefix, and second_function only searches for ";admin=true;")
+     *
+     * The user input we send is ";admin=true;AAAA". first_function
+     * replaces ';' and '=' with ' ', so plaintext block 2 becomes:
+     *
+     *     " admin true AAAA"
+     *      0123456789...
+     *
+     * We want to flip the three spaces at offsets 0, 6, 11 back into
+     * ';', '=', ';'. Deltas are computed from the plaintext bytes:
+     *
+     *     ' ' = 0x20,  ';' = 0x3b,  '=' = 0x3d
+     *
+     *     delta[0]  = ' ' ^ ';' = 0x20 ^ 0x3b = 0x1b = 27
+     *     delta[6]  = ' ' ^ '=' = 0x20 ^ 0x3d = 0x1d = 29
+     *     delta[11] = ' ' ^ ';' = 0x20 ^ 0x3b = 0x1b = 27
+     *
+     * Those deltas go into ciphertext block 1 (bytes 16..31), at the
+     * offsets matching the plaintext positions inside block 2:
+     *
+     *     ciphertext byte 16 + 0  -> plaintext block 2 byte 0
+     *     ciphertext byte 16 + 6  -> plaintext block 2 byte 6
+     *     ciphertext byte 16 + 11 -> plaintext block 2 byte 11
+     *
+     * After the flips, block 2 decrypts to ";admin=true;AAAA".
+     * No integrity check is present, so second_function accepts it.
+     */
 
-    cypher.heap[16] = 27; // first byte of 2nd block
+    printf("%c\n", 32 ^ 27);
+    printf("%c\n", 32 ^ 29);
+
+    cypher.heap[16] ^= 27; // 0th byte of 2nd block. ' ' ^ 27 = ';'
+    cypher.heap[22] ^= 29; // 6th byte of 2nd block. ' ' ^ = '='
+    cypher.heap[27] ^= 27; // 11th byte of 2nd block. ' ' ^ 27 = ';'
 
     String pt    = String_create(WC_LIBC);
     bool   found = second_function(StrView_over_String(&cypher), rkey, iv, &pt);
-    String_print(&pt);
     WC_ASSERT(found, "didn't find admin=true");
-
+    String_print(&pt);
 
 
     String_destroy(&pt);
