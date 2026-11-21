@@ -1,3 +1,7 @@
+#include "random_single.h"
+#include "views_single.h"
+
+
 
 int set3_run(void);
 
@@ -48,5 +52,9 @@ So you can assume that if you corrupt a decryption AND it had valid padding, you
 
 It is easy to get tripped up on the fact that CBC plaintexts are "padded". Padding oracles have nothing to do with the actual padding on a CBC plaintext. It's an attack that targets a specific bit of code that handles decryption. You can mount a padding oracle on any CBC block, whether it's padded or not. 
 */
+
+void encrypt_cbc_rand_str(WC_Pcg32* rng, StrView key, StrView iv, String* cypher);
+
+bool decrypt_cbc_check_padding(StrView cypher, StrView key, StrView iv, String* plaintext);
 
 int challenge17_run(void);

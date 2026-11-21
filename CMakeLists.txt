@@ -93,6 +93,7 @@ set(SRC_FILES
     src/set2/challenge15.c
     src/set2/challenge16.c
     # set3
+    src/set3/set3.c
     src/set3/challenge17.c
 )
 
