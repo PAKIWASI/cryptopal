@@ -55,7 +55,7 @@ It is easy to get tripped up on the fact that CBC plaintexts are "padded". Paddi
 
 void encrypt_cbc_rand_str(WC_Pcg32* rng, StrView key, StrView iv, String* cypher);
 
-bool decrypt_cbc_check_padding(StrView cypher, StrView key, StrView iv, String* plaintext);
+bool decrypt_cbc_check_padding(StrView cypher, StrView key, StrView iv);
 
 int challenge17_run(void);
 
